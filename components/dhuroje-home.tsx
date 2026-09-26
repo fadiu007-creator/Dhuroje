@@ -21,7 +21,7 @@ export default function DhurojeHome() {
 
   const filtered=useMemo(()=>listings.filter(item=>{
     const categoryMatch=category==="Të gjitha"||item.category===category;
-    const queryMatch=\`\${item.title} \${item.description}\`.toLowerCase().includes(query.toLowerCase());
+    const queryMatch=(item.title+" "+item.description).toLowerCase().includes(query.toLowerCase());
     return categoryMatch&&queryMatch;
   }),[category,listings,query]);
 
