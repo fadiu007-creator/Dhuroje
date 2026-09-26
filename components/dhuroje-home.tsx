@@ -1,50 +1,61 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/browser";
 
 type Category = "Të gjitha" | "Ushqim" | "Veshmbathje" | "Shtëpi" | "Elektronikë" | "Fëmijë" | "Libra" | "Të tjera";
-type Listing = { id:number; title:string; category:Exclude<Category,"Të gjitha">; distance:string; location:string; emoji:string; available:string; description:string };
+type Listing = { id:string; owner_id:string; title:string; description:string; category:Exclude<Category,"Të gjitha">; status:string; location_name:string; latitude:number|null; longitude:number|null; available_until:string|null; food_best_before:string|null; food_refrigerated:boolean|null; food_opened:boolean|null; created_at:string };
+const categories:Category[]=["Të gjitha","Ushqim","Veshmbathje","Shtëpi","Elektronikë","Fëmijë","Libra","Të tjera"];
+const emoji=(c:string)=>({Ushqim:"🥖",Veshmbathje:"👕",Shtëpi:"🪑",Elektronikë:"📱",Fëmijë:"🧸",Libra:"📚","Të tjera":"🎁"} as Record<string,string>)[c]||"🎁";
+const supabase=createClient();
 
-const initialListings: Listing[] = [
-  {id:1,title:"Bukë dhe produkte furre",category:"Ushqim",distance:"0.8 km",location:"Ferizaj",emoji:"🥖",available:"Sot deri 20:00",description:"Paketime të paprekura, të marra sot."},
-  {id:2,title:"Rroba për fëmijë",category:"Fëmijë",distance:"1.2 km",location:"Ferizaj",emoji:"👕",available:"Deri nesër",description:"Disa palë rroba të pastra, madhësi të ndryshme."},
-  {id:3,title:"Karrige druri",category:"Shtëpi",distance:"1.7 km",location:"Ferizaj",emoji:"🪑",available:"Këtë javë",description:"Karrige e përdorur, funksionale."},
-  {id:4,title:"Libra shkollorë",category:"Libra",distance:"2.1 km",location:"Ferizaj",emoji:"📚",available:"Deri të dielën",description:"Libra në gjendje të mirë."}
-];
+export default function DhurojeHome(){
+  const [listings,setListings]=useState<Listing[]>([]),[category,setCategory]=useState<Category>("Të gjitha"),[query,setQuery]=useState(""),[user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]),[showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[activeListing,setActiveListing]=useState<Listing|null>(null),[error,setError]=useState(""),[authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
 
-export default function DhurojeHome() {
-  const [category,setCategory]=useState<Category>("Të gjitha");
-  const [listings,setListings]=useState(initialListings);
-  const [showGive,setShowGive]=useState(false);\n  const [showMenu,setShowMenu]=useState(false);\n  const [showFilters,setShowFilters]=useState(false);
-  const [claimed,setClaimed]=useState<number[]>([]);
-  const [query,setQuery]=useState("");
-
-  const filtered=useMemo(()=>listings.filter(item=>{
-    const categoryMatch=category==="Të gjitha"||item.category===category;
-    const queryMatch=(item.title+" "+item.description).toLowerCase().includes(query.toLowerCase());
-    return categoryMatch&&queryMatch;
-  }),[category,listings,query]);
-
-  function claim(id:number){setClaimed(current=>current.includes(id)?current:[...current,id]);}
-  function addListing(formData:FormData){
-    const title=String(formData.get("title")||"").trim();
-    const newCategory=String(formData.get("category")||"Të tjera") as Exclude<Category,"Të gjitha">;
-    const description=String(formData.get("description")||"").trim();
-    if(!title)return;
-    setListings(current=>[{id:Date.now(),title,category:newCategory,description:description||"Pa përshkrim.",distance:"Pranë teje",location:"Lokacioni yt",emoji:newCategory==="Ushqim"?"🍎":newCategory==="Veshmbathje"?"👕":"🎁",available:"Sapo u postua"},...current]);
-    setShowGive(false);
+  async function load(){
+    setLoading(true);
+    const {data,error}=await supabase.from("dhuroje_listings").select("*").eq("status","available").order("created_at",{ascending:false});
+    if(error)setError(error.message); else setListings((data||[]) as Listing[]);
+    const {data:{session}}=await supabase.auth.getSession(); const u=session?.user||null; setUser(u);
+    if(u){
+      const [p,f,c]=await Promise.all([supabase.from("dhuroje_profiles").select("*").eq("id",u.id).maybeSingle(),supabase.from("dhuroje_favorites").select("listing_id").eq("user_id",u.id),supabase.from("dhuroje_claims").select("listing_id").eq("claimant_id",u.id)]);
+      setProfile(p.data);setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
+    } else {setProfile(null);setFavorites([]);setClaims([]);} setLoading(false);
   }
+  useEffect(()=>{load();const {data}=supabase.auth.onAuthStateChange((_e,s)=>setUser(s?.user||null));return()=>data.subscription.unsubscribe();},[]);
+  useEffect(()=>{const channel=supabase.channel("dhuroje-live").on("postgres_changes",{event:"*",schema:"public",table:"dhuroje_listings"},()=>load()).on("postgres_changes",{event:"INSERT",schema:"public",table:"dhuroje_messages"},()=>setShowMessages(true)).subscribe();return()=>{supabase.removeChannel(channel);};},[]);
+  const filtered=useMemo(()=>listings.filter(x=>(category==="Të gjitha"||x.category===category)&&(x.title+" "+x.description).toLowerCase().includes(query.toLowerCase())),[listings,category,query]);
+  function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
+  async function auth(e:FormEvent<HTMLFormElement>){e.preventDefault();setError("");const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));const result=authMode==="signup"?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(result.error){setError(result.error.message);return;}if(authMode==="signup"&&result.data.user){await supabase.from("dhuroje_profiles").upsert({id:result.data.user.id,display_name:String(f.get("name")||email.split("@")[0])});if(!result.data.session){setError("Kontrollo email-in për konfirmim.");return;}}setShowAuth(false);await load();}
+  async function signOut(){await supabase.auth.signOut();setShowMenu(false);await load();}
+  async function toggleFavorite(id:string){if(!requireAuth())return;if(favorites.includes(id)){await supabase.from("dhuroje_favorites").delete().eq("user_id",user.id).eq("listing_id",id);setFavorites(x=>x.filter(v=>v!==id));}else{await supabase.from("dhuroje_favorites").insert({user_id:user.id,listing_id:id});setFavorites(x=>[...x,id]);}}
+  async function claim(id:string){if(!requireAuth())return;if(claims.includes(id))return;const {error:e}=await supabase.from("dhuroje_claims").insert({listing_id:id,claimant_id:user.id,status:"pending"});if(e){setError(e.message);return;}setClaims(x=>[...x,id]);}
+  async function createListing(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!requireAuth())return;const f=new FormData(e.currentTarget);const {error:e1}=await supabase.from("dhuroje_listings").insert({owner_id:user.id,title:String(f.get("title")),description:String(f.get("description")||""),category:String(f.get("category")),status:"available",location_name:location,latitude:null,longitude:null,available_until:f.get("available_until")?new Date(String(f.get("available_until"))).toISOString():null,food_best_before:null,food_refrigerated:false,food_opened:false});if(e1){setError(e1.message);return;}setShowGive(false);await load();}
+  async function startChat(listing:Listing){if(!requireAuth())return;const {data:c,error:e}=await supabase.from("dhuroje_conversations").insert({listing_id:listing.id}).select("id").single();if(e){setError(e.message);return;}await supabase.from("dhuroje_conversation_members").insert([{conversation_id:c.id,user_id:user.id},{conversation_id:c.id,user_id:listing.owner_id}]);setShowMessages(true);}
+  function locate(){if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(()=>setLocation("Lokacioni im"),()=>setError("Lokacioni nuk u lejua."));}
 
   return <main>
-    <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="top-actions"><button className="header-link" onClick={()=>setShowGive(true)}>Dhuro</button><button className="profile-button" onClick={()=>setShowMenu(!showMenu)}>●</button>{showMenu&&<div className="profile-menu"><strong>Dhuroje</strong><button>Hyr / Regjistrohu</button><button>Shpalljet e mia</button><button>Mesazhet</button></div>}</div></header>
-    <section className="hero"><div><p className="eyebrow">DHURATA PRANË TEJE</p><h1>Gjej.<br/><span>Merr. Dhuro.</span></h1><p className="hero-copy">Gjëra falas nga njerëzit e komunitetit tënd. Jepu një jetë të dytë.</p></div><div className="hero-actions"><button className="primary" onClick={()=>setShowGive(true)}>＋ Dhuro një gjë</button></div></section>
+    <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="top-actions"><button className="header-link" onClick={()=>requireAuth()&&setShowGive(true)}>Dhuro</button><button className="profile-button" onClick={()=>setShowMenu(!showMenu)}>●</button>{showMenu&&<div className="profile-menu">{user?<><strong>{profile?.display_name||user.email}</strong><button onClick={()=>setShowMessages(true)}>Mesazhet</button><button onClick={()=>setShowGive(true)}>Shpalljet e mia</button><button onClick={signOut}>Dil</button></>:<button onClick={()=>setShowAuth(true)}>Hyr / Regjistrohu</button>}</div>}</div></header>
+    <section className="hero"><div><p className="eyebrow">DHURATA PRANË TEJE</p><h1>Gjej.<br/><span>Merr. Dhuro.</span></h1><p className="hero-copy">Gjëra falas nga njerëzit e komunitetit tënd. Jepu një jetë të dytë.</p></div><button className="primary" onClick={()=>requireAuth()&&setShowGive(true)}>＋ Dhuro një gjë</button></section>
     <section className="search-wrap"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko ushqim, rroba, mobilie..."/></section>
-    <section className="categories">{(["Të gjitha","Ushqim","Veshmbathje","Shtëpi","Elektronikë","Fëmijë","Libra","Të tjera"] as Category[]).map(item=><button key={item} className={category===item?"chip active":"chip"} onClick={()=>setCategory(item)}>{item}</button>)}</section>
-    <section className="location-row"><div><span className="pin">⌖</span><div><strong>Ferizaj</strong><small>Shpallje në zonën tënde</small></div></div><div className="location-actions"><button className="filter-button" onClick={()=>setShowFilters(!showFilters)}>☷ Filtro</button><button className="map-toggle">🗺️ Harta</button></div></section>
-    <section className="section-head"><div><p className="eyebrow">FALAS PRANË TEJE</p><h2>{filtered.length} dhurata</h2></div><button className="sort">Më të rejat ▾</button></section>{showFilters&&<div className="filter-panel"><strong>Afërsia</strong><button>Brenda 5 km</button><button>Brenda 10 km</button><button>Të gjitha</button></div>}
-    <section className="listing-grid">{filtered.map(item=>{const isClaimed=claimed.includes(item.id);return <article className="card" key={item.id}><div className="card-image"><span>{item.emoji}</span><b>FALAS</b></div><div className="card-body"><div className="meta"><span>{item.category}</span><span>📍 {item.distance}</span></div><h3>{item.title}</h3><p>{item.description}</p><div className="card-footer"><small>⌖ {item.location} · {item.available}</small><button className={isClaimed?"claimed":"claim"} onClick={()=>claim(item.id)}>{isClaimed?"Kërkuar ✓":"Kërko"}</button></div></div></article>})}</section>
-    {filtered.length===0&&<div className="empty">Nuk u gjet asgjë. Provo një kategori tjetër.</div>}
-    {showGive&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowGive(false)}><form className="modal" action={addListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={()=>setShowGive(false)}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder="p.sh. 5 pako bukë"/></label><label>Kategoria<select name="category" defaultValue="Ushqim">{["Ushqim","Veshmbathje","Shtëpi","Elektronikë","Fëmijë","Libra","Të tjera"].map(x=><option key={x}>{x}</option>)}</select></label><label>Përshkrimi<textarea name="description" placeholder="Gjendja, sasia, kushtet e marrjes..."/></label><div className="food-note">🍎 Për ushqimin: në versionin e plotë do të kërkojmë afatin e përdorimit dhe nëse duhet frigorifer.</div><button className="primary full" type="submit">Publiko falas</button></form></div>}
-    <nav className="bottom-nav"><button className="nav-active">⌂<span>Eksploro</span></button><button>♡<span>Ruajturat</span></button><button onClick={()=>setShowGive(true)} className="nav-add">＋</button><button>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
+    <section className="categories">{categories.map(x=><button key={x} className={category===x?"chip active":"chip"} onClick={()=>setCategory(x)}>{x}</button>)}</section>
+    <section className="location-row"><div><span className="pin">⌖</span><div><strong>{location}</strong><small>Shpallje falas në zonën tënde</small></div></div><div className="location-actions"><button className="filter-button" onClick={locate}>📍 Përdor lokacionin</button><button className="map-toggle">🗺️ Harta</button></div></section>
+    <section className="section-head"><div><p className="eyebrow">FALAS PRANË TEJE</p><h2>{filtered.length} dhurata</h2></div><button className="sort">Më të rejat ▾</button></section>
+    {error&&<div className="error">{error}<button onClick={()=>setError("")}>×</button></div>}
+    <section className="listing-grid">{filtered.map(item=><article className="card" key={item.id} onClick={()=>setActiveListing(item)}><div className="card-image"><span>{emoji(item.category)}</span><b>FALAS</b><button className="heart" onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}}>{favorites.includes(item.id)?"♥":"♡"}</button></div><div className="card-body"><div className="meta"><span>{item.category}</span><span>📍 {item.location_name||"Pranë teje"}</span></div><h3>{item.title}</h3><p>{item.description||"Pa përshkrim."}</p><div className="card-footer"><small>{item.available_until?"Deri "+new Date(item.available_until).toLocaleDateString("sq-AL"):"Sapo u postua"}</small><button className={claims.includes(item.id)?"claimed":"claim"} onClick={e=>{e.stopPropagation();claim(item.id)}}>{claims.includes(item.id)?"Kërkuar ✓":"Kërko"}</button></div></div></article>)}</section>
+    {!loading&&filtered.length===0&&<div className="empty">Nuk ka ende dhurata. Bëhu i pari që dhuron diçka.</div>}
+    {showGive&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowGive(false)}><form className="modal" onSubmit={createListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={()=>setShowGive(false)}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder="p.sh. 5 pako bukë"/></label><label>Kategoria<select name="category" defaultValue="Ushqim">{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label><label>Përshkrimi<textarea name="description" placeholder="Gjendja, sasia, kushtet e marrjes..."/></label><label>Disponueshme deri<input name="available_until" type="datetime-local"/></label><div className="food-note">🍎 Për ushqimin, shkruaj afatin e përdorimit dhe nëse duhet frigorifer.</div><button className="primary full" type="submit">Publiko falas</button></form></div>}
+    {activeListing&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setActiveListing(null)}><div className="modal"><div className="modal-head"><div><p className="eyebrow">{activeListing.category}</p><h2>{activeListing.title}</h2></div><button className="close" onClick={()=>setActiveListing(null)}>×</button></div><div className="detail-emoji">{emoji(activeListing.category)}</div><p>{activeListing.description||"Pa përshkrim."}</p><p>📍 {activeListing.location_name||"Pranë teje"}</p>{activeListing.food_best_before&&<p>🍎 Afati: {new Date(activeListing.food_best_before).toLocaleDateString("sq-AL")}</p>}<div className="detail-actions"><button className="primary" onClick={()=>claim(activeListing.id)}>{claims.includes(activeListing.id)?"Kërkesa u dërgua ✓":"Kërko këtë dhuratë"}</button><button className="secondary" onClick={()=>startChat(activeListing)}>💬 Mesazho dhuruesin</button><button className="secondary" onClick={()=>toggleFavorite(activeListing.id)}>{favorites.includes(activeListing.id)?"♥ Ruajtur":"♡ Ruaje"}</button></div></div></div>}
+    {showAuth&&<div className="modal-backdrop"><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>{authMode==="login"?"Hyr në llogari":"Krijo llogari"}</h2></div><button type="button" className="close" onClick={()=>setShowAuth(false)}>×</button></div>{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full">{authMode==="login"?"Hyr":"Regjistrohu"}</button><button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button></form></div>}
+    {showMessages&&<Messages user={user} onClose={()=>setShowMessages(false)}/>}
+    <nav className="bottom-nav"><button className="nav-active">⌂<span>Eksploro</span></button><button onClick={()=>requireAuth()}>♡<span>Ruajturat</span></button><button onClick={()=>requireAuth()&&setShowGive(true)} className="nav-add">＋</button><button onClick={()=>requireAuth()&&setShowMessages(true)}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
   </main>;
+}
+
+function Messages({user,onClose}:{user:any;onClose:()=>void}){
+  const [convos,setConvos]=useState<any[]>([]),[selected,setSelected]=useState<any>(null),[body,setBody]=useState("");
+  async function load(){if(!user)return;const {data}=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",user.id);const ids=(data||[]).map(x=>x.conversation_id);if(!ids.length){setConvos([]);return;}const {data:cs}=await supabase.from("dhuroje_conversations").select("id,listing_id,created_at").in("id",ids).order("created_at",{ascending:false});setConvos(cs||[]);}
+  useEffect(()=>{load();},[]);
+  async function send(){if(!selected||!body.trim())return;await supabase.from("dhuroje_messages").insert({conversation_id:selected.id,sender_id:user.id,body:body.trim()});setBody("");}
+  return <div className="modal-backdrop"><div className="modal messages-modal"><div className="modal-head"><h2>Mesazhet</h2><button className="close" onClick={onClose}>×</button></div>{!convos.length?<div className="empty">Nuk ke ende biseda.</div>:<div className="message-list">{convos.map(c=><button key={c.id} onClick={()=>setSelected(c)}>💬 Bisedë për shpalljen · {new Date(c.created_at).toLocaleDateString("sq-AL")}</button>)}</div>}{selected&&<div className="composer"><input value={body} onChange={e=>setBody(e.target.value)} placeholder="Shkruaj mesazh..."/><button className="primary" onClick={send}>Dërgo</button></div>}</div></div>;
 }
