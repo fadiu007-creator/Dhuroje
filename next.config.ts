@@ -1,3 +1,10 @@
 import type { NextConfig } from "next";
-const nextConfig: NextConfig = { images: { remotePatterns: [{ protocol: "https", hostname: "images.unsplash.com" }] } };
+
+const nextConfig: NextConfig = {
+  output: "export",
+  trailingSlash: true,
+  images: { unoptimized: true },
+  basePath: "/Dhuroje",
+};
+
 export default nextConfig;
