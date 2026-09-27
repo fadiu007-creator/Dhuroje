@@ -129,13 +129,27 @@ export default function DhurojeHome(){
   async function createListing(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget);
+    setPosting(true);
     if(!user){
-      setPendingPost(f);
-      setAuthMode("signup");
-      setShowAuth(true);
+      const name=String(f.get("account_name")||"").trim();
+      const email=String(f.get("account_email")||"").trim();
+      const password=String(f.get("account_password")||"");
+      if(!name||!email||password.length<6){
+        setError("Plotëso emrin, emailin dhe një fjalëkalim me të paktën 6 karaktere.");
+        setPosting(false);return;
+      }
+      const result=await supabase.auth.signUp({email,password});
+      if(result.error){setError(result.error.message);setPosting(false);return;}
+      if(!result.data.user||!result.data.session){
+        setError("Llogaria u krijua, por email-i duhet konfirmuar para publikimit. Çaktivizo “Confirm email” në Supabase për publikim të menjëhershëm.");
+        setPosting(false);return;
+      }
+      await supabase.from("dhuroje_profiles").upsert({id:result.data.user.id,display_name:name});
+      const ok=await finishListing(result.data.user,f);
+      setPosting(false);
+      if(ok){setShowGive(false);await load();}
       return;
     }
-    setPosting(true);
     const ok=await finishListing(user,f);
     setPosting(false);
     if(ok){setShowGive(false);await load();}
@@ -175,11 +189,11 @@ export default function DhurojeHome(){
     {!loading&&filtered.length===0&&<div className="empty">Nuk ka ende dhurata që përputhen me kërkimin.</div>}
 
     {showGive&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowGive(false)}><form className="modal" onSubmit={createListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={()=>setShowGive(false)}>×</button></div>
-      <label>Çfarë po dhuron?<input name="title" required placeholder="p.sh. 5 pako bukë"/></label><label>Kategoria<select name="category" defaultValue="Ushqim">{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
+      {!user&&<div className="inline-signup"><p className="eyebrow">POSTO DHE REGJISTROHU</p><p className="form-help">Krijo llogarinë këtu dhe dhurata publikohet menjëherë.</p><label>Emri<input name="account_name" required placeholder="Emri yt"/></label><label>Email<input name="account_email" type="email" required placeholder="ti@example.com"/></label><label>Fjalëkalimi<input name="account_password" type="password" minLength={6} required placeholder="Të paktën 6 karaktere"/></label></div>}<label>Çfarë po dhuron?<input name="title" required placeholder="p.sh. 5 pako bukë"/></label><label>Kategoria<select name="category" defaultValue="Ushqim">{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       <label>Fotot <input name="photos" type="file" accept="image/*" multiple /></label><small className="form-help">Deri në 6 foto. Fotot ruhen në Dhuroje.</small>
       <label>Përshkrimi<textarea name="description" placeholder="Gjendja, sasia, kushtet e marrjes..."/></label><label>Disponueshme deri<input name="available_until" type="datetime-local"/></label>
       <label>Afati i ushqimit<input name="food_best_before" type="datetime-local"/></label><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div>
-      <div className="food-note">📍 {location{"}"}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting}>{posting?"Po publikohet…":"Publiko falas"}</button>
+      <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting}>{posting?"Po publikohet…":user?"Publiko falas":"Krijo llogari & publiko"}</button>
     </form></div>}
 
     {activeListing&&<ListingDetail listing={activeListing} image={images[activeListing.id]?.[0]} saved={favorites.includes(activeListing.id)} claimed={claims.includes(activeListing.id)} onClose={()=>setActiveListing(null)} onClaim={()=>claim(activeListing.id)} onSave={()=>toggleFavorite(activeListing.id)} onChat={()=>startChat(activeListing)}/>}
