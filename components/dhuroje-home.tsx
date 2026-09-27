@@ -76,7 +76,7 @@ export default function DhurojeHome(){
     return a;
   },[listings,category,query,coords,nearbyOnly]);
 
-  async function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
+  function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
   async function auth(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
