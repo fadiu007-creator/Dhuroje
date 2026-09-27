@@ -59,7 +59,7 @@ export default function DhurojeHome(){
     setLoading(false);
   }
 
-  useEffect(()=>{load(); const {data}=supabase.auth.onAuthStateChange((_event,session)=>{setUser(session?.user||null); window.setTimeout(load,350);}); return()=>data.subscription.unsubscribe();},[]);
+  useEffect(()=>{load(); const {data}=supabase.auth.onAuthStateChange((_event,session)=>{setUser(session?.user||null);}); return()=>data.subscription.unsubscribe();},[]);
   useEffect(()=>{
     const channel=supabase.channel("dhuroje-live")
       .on("postgres_changes",{event:"*",schema:"public",table:"dhuroje_listings"},()=>{if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=setTimeout(load,900);})
