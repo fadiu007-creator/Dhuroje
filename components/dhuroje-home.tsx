@@ -58,7 +58,7 @@ export default function DhurojeHome(){
     setLoading(false);
   }
 
-  useEffect(()=>{load();const {data}=supabase.auth.onAuthStateChange(()=>load());return()=>data.subscription.unsubscribe();},[]);
+  useEffect(()=>{load(); const {data}=supabase.auth.onAuthStateChange((_event,session)=>{setUser(session?.user||null); window.setTimeout(load,350);}); return()=>data.subscription.unsubscribe();},[]);
   useEffect(()=>{
     const channel=supabase.channel("dhuroje-live")
       .on("postgres_changes",{event:"*",schema:"public",table:"dhuroje_listings"},()=>load())
@@ -74,7 +74,8 @@ export default function DhurojeHome(){
     return a;
   },[listings,category,query,coords,nearbyOnly]);
 
-  function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
+  async function ensureGuest(){ if(user)return user; setError(""); const {data,error:e}=await supabase.auth.signInAnonymously(); if(e){setError("Postimi si mysafir nuk është aktivizuar ende në Supabase."); return null;} setUser(data.user); return data.user; }
+  async function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
   async function auth(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
     const result=authMode==="signup"?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});
@@ -97,10 +98,10 @@ export default function DhurojeHome(){
     if(e){setError(e.message);return;}setClaims(x=>[...x,id]);
   }
   async function createListing(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();if(!requireAuth())return;setError("");
+    e.preventDefault(); const postingUser=await ensureGuest(); if(!postingUser)return; setError("");
     const f=new FormData(e.currentTarget), files=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
     const {data:item,error:e1}=await supabase.from("dhuroje_listings").insert({
-      owner_id:user.id,title:String(f.get("title")),description:String(f.get("description")||""),
+      owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
       category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:location,
       latitude:coords?.lat??null,longitude:coords?.lon??null,
       available_until:f.get("available_until")?new Date(String(f.get("available_until"))).toISOString():null,
