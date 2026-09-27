@@ -17,6 +17,7 @@ const categoryDb:Record<string,string>={Ushqim:"food",Veshmbathje:"clothing",Sht
 const categoryLabel:Record<string,string>={food:"Ushqim",clothing:"Veshmbathje",home:"Shtëpi",electronics:"Elektronikë",kids:"Fëmijë",books:"Libra",other:"Të tjera"};
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
 const supabase=createClient();
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 function distanceKm(a:number|null,b:number|null,c:number|null,d:number|null){
   if(a==null||b==null||c==null||d==null)return null;
@@ -61,7 +62,7 @@ export default function DhurojeHome(){
   useEffect(()=>{load(); const {data}=supabase.auth.onAuthStateChange((_event,session)=>{setUser(session?.user||null); window.setTimeout(load,350);}); return()=>data.subscription.unsubscribe();},[]);
   useEffect(()=>{
     const channel=supabase.channel("dhuroje-live")
-      .on("postgres_changes",{event:"*",schema:"public",table:"dhuroje_listings"},()=>load())
+      .on("postgres_changes",{event:"*",schema:"public",table:"dhuroje_listings"},()=>{if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=setTimeout(load,900);})
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"dhuroje_messages"},()=>user&&setShowMessages(true))
       .subscribe();
     return()=>{supabase.removeChannel(channel);};
@@ -74,7 +75,7 @@ export default function DhurojeHome(){
     return a;
   },[listings,category,query,coords,nearbyOnly]);
 
-  async function ensureGuest(){ if(user)return user; setError(""); const {data,error:e}=await supabase.auth.signInAnonymously(); if(e){setError("Postimi si mysafir nuk është aktivizuar ende në Supabase."); return null;} setUser(data.user); return data.user; }
+  async function ensureGuest(){ if(user)return user; setError(""); const {data,error:e}=await supabase.auth.signInAnonymously(); if(e){setError("Postimi si mysafir kërkon aktivizimin e Anonymous Sign-Ins në Supabase."); return null;} if(data.user){await supabase.from("dhuroje_profiles").upsert({id:data.user.id,display_name:"Mysafir"});setUser(data.user);} return data.user; }
   async function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
   async function auth(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
