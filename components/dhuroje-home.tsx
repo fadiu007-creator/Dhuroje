@@ -31,6 +31,7 @@ export default function DhurojeHome(){
   const [category,setCategory]=useState<Category>("Të gjitha"),[query,setQuery]=useState("");
   const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
   const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false);
+  const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
   const [showDashboard,setShowDashboard]=useState(false),[activeListing,setActiveListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false);
@@ -75,15 +76,24 @@ export default function DhurojeHome(){
     return a;
   },[listings,category,query,coords,nearbyOnly]);
 
-  async function ensureGuest(){ if(user)return user; setError(""); const {data,error:e}=await supabase.auth.signInAnonymously(); if(e){setError("Postimi si mysafir kërkon aktivizimin e Anonymous Sign-Ins në Supabase."); return null;} if(data.user){await supabase.from("dhuroje_profiles").upsert({id:data.user.id,display_name:"Mysafir"});setUser(data.user);} return data.user; }
   async function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
   async function auth(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();setError("");const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
-    const result=authMode==="signup"?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});
+    e.preventDefault();setError("");
+    const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
+    const result=authMode==="signup"
+      ?await supabase.auth.signUp({email,password})
+      :await supabase.auth.signInWithPassword({email,password});
     if(result.error){setError(result.error.message);return;}
     if(authMode==="signup"&&result.data.user){
       await supabase.from("dhuroje_profiles").upsert({id:result.data.user.id,display_name:String(f.get("name")||email.split("@")[0])});
-      if(!result.data.session){setError("Kontrollo email-in për konfirmim.");return;}
+      if(pendingPost){
+        if(!result.data.session){setError("Llogaria u krijua. Nëse kërkohet konfirmim email-i, konfirmoje dhe pastaj publikoje përsëri.");return;}
+        setPosting(true);
+        const ok=await finishListing(result.data.user,pendingPost);
+        setPosting(false);
+        setPendingPost(null);
+        if(ok){setShowAuth(false);setShowGive(false);await load();return;}
+      }
     }
     setShowAuth(false);await load();
   }
@@ -98,9 +108,8 @@ export default function DhurojeHome(){
     const {error:e}=await supabase.from("dhuroje_claims").insert({listing_id:id,claimant_id:user.id,status:"pending"});
     if(e){setError(e.message);return;}setClaims(x=>[...x,id]);
   }
-  async function createListing(e:FormEvent<HTMLFormElement>){
-    e.preventDefault(); const postingUser=await ensureGuest(); if(!postingUser)return; setError("");
-    const f=new FormData(e.currentTarget), files=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
+  async function finishListing(postingUser:any,f:FormData){
+    const files=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
     const {data:item,error:e1}=await supabase.from("dhuroje_listings").insert({
       owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
       category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:location,
@@ -109,13 +118,27 @@ export default function DhurojeHome(){
       food_best_before:f.get("food_best_before")?new Date(String(f.get("food_best_before"))).toISOString():null,
       food_refrigerated:f.get("food_refrigerated")==="on",food_opened:f.get("food_opened")==="on"
     }).select("*").single();
-    if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return;}
+    if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return false;}
     for(let i=0;i<Math.min(files.length,6);i++){
-      const file=files[i], ext=file.name.split(".").pop()?.toLowerCase()||"jpg", path=user.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
+      const file=files[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg",path=postingUser.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
       const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
       if(!up.error)await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
     }
-    setShowGive(false);await load();
+    return true;
+  }
+  async function createListing(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();setError("");
+    const f=new FormData(e.currentTarget);
+    if(!user){
+      setPendingPost(f);
+      setAuthMode("signup");
+      setShowAuth(true);
+      return;
+    }
+    setPosting(true);
+    const ok=await finishListing(user,f);
+    setPosting(false);
+    if(ok){setShowGive(false);await load();}
   }
   async function startChat(listing:Listing){
     if(!requireAuth())return;
@@ -131,11 +154,11 @@ export default function DhurojeHome(){
 
   return <main>
     <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="top-actions">
-      <button className="header-link" onClick={()=>requireAuth()&&setShowGive(true)}>Dhuro</button><button className="profile-button" onClick={()=>setShowMenu(!showMenu)}>●</button>
+      <button className="header-link" onClick={()=>setShowGive(true)}>Dhuro</button><button className="profile-button" onClick={()=>setShowMenu(!showMenu)}>●</button>
       {showMenu&&<div className="profile-menu">{user?<><strong>{profile?.display_name||user.email}</strong><button onClick={()=>setShowMessages(true)}>💬 Mesazhet</button><button onClick={()=>requireAuth()&&setShowDashboard(true)}>📦 Paneli im</button><button onClick={signOut}>Dil</button></>:<button onClick={()=>setShowAuth(true)}>Hyr / Regjistrohu</button>}</div>}
     </div></header>
 
-    <section className="hero"><div><p className="eyebrow">DHURATA PRANË TEJE</p><h1>Gjej.<br/><span>Merr. Dhuro.</span></h1><p className="hero-copy">Gjëra falas nga njerëzit e komunitetit tënd. Jepu një jetë të dytë.</p></div><div className="hero-actions"><button className="primary" onClick={()=>requireAuth()&&setShowGive(true)}>＋ Dhuro një gjë</button>{user&&<button className="secondary" onClick={()=>setShowDashboard(true)}>Paneli im</button>}</div></section>
+    <section className="hero"><div><p className="eyebrow">DHURATA PRANË TEJE</p><h1>Gjej.<br/><span>Merr. Dhuro.</span></h1><p className="hero-copy">Gjëra falas nga njerëzit e komunitetit tënd. Jepu një jetë të dytë.</p></div><div className="hero-actions"><button className="primary" onClick={()=>setShowGive(true)}>＋ Dhuro një gjë</button>{user&&<button className="secondary" onClick={()=>setShowDashboard(true)}>Paneli im</button>}</div></section>
     <section className="search-wrap"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko ushqim, rroba, mobilie..."/></section>
     <section className="categories">{categories.map(x=><button key={x} className={category===x?"chip active":"chip"} onClick={()=>setCategory(x)}>{x}</button>)}</section>
     <section className="location-row"><div><span className="pin">⌖</span><div><strong>{location}</strong><small>{nearbyOnly?"Brenda 25 km":"Shpallje falas në zonën tënde"}</small></div></div><div className="location-actions"><button className="filter-button" onClick={locate}>📍 Përdor lokacionin</button><button className="map-toggle" onClick={()=>setMapMode(x=>!x)}>🗺️ {mapMode?"Lista":"Harta"}</button></div></section>
@@ -156,14 +179,14 @@ export default function DhurojeHome(){
       <label>Fotot <input name="photos" type="file" accept="image/*" multiple /></label><small className="form-help">Deri në 6 foto. Fotot ruhen në Dhuroje.</small>
       <label>Përshkrimi<textarea name="description" placeholder="Gjendja, sasia, kushtet e marrjes..."/></label><label>Disponueshme deri<input name="available_until" type="datetime-local"/></label>
       <label>Afati i ushqimit<input name="food_best_before" type="datetime-local"/></label><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div>
-      <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit">Publiko falas</button>
+      <div className="food-note">📍 {location{"}"}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting}>{posting?"Po publikohet…":"Publiko falas"}</button>
     </form></div>}
 
     {activeListing&&<ListingDetail listing={activeListing} image={images[activeListing.id]?.[0]} saved={favorites.includes(activeListing.id)} claimed={claims.includes(activeListing.id)} onClose={()=>setActiveListing(null)} onClaim={()=>claim(activeListing.id)} onSave={()=>toggleFavorite(activeListing.id)} onChat={()=>startChat(activeListing)}/>}
-    {showAuth&&<div className="modal-backdrop"><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>{authMode==="login"?"Hyr në llogari":"Krijo llogari"}</h2></div><button type="button" className="close" onClick={()=>setShowAuth(false)}>×</button></div>{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full">{authMode==="login"?"Hyr":"Regjistrohu"}</button><button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button></form></div>}
+    {showAuth&&<div className="modal-backdrop"><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">{pendingPost?"HAPI I FUNDIT":"DHUROJE"}</p><h2>{pendingPost?"Krijo llogarinë dhe publiko":"Krijo llogari"}</h2></div><button type="button" className="close" onClick={()=>{setShowAuth(false);setPendingPost(null)}}>×</button></div>{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Regjistrohu"}</button>{!pendingPost&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}</form></div>}
     {showMessages&&<Messages user={user} onClose={()=>setShowMessages(false)}/>}
     {showDashboard&&<Dashboard user={user} onClose={()=>setShowDashboard(false)} onChanged={load}/>}
-    <nav className="bottom-nav"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false)}}>⌂<span>Eksploro</span></button><button onClick={()=>requireAuth()&&setCategory("Të gjitha")}>♡<span>Ruajturat</span></button><button onClick={()=>requireAuth()&&setShowGive(true)} className="nav-add">＋</button><button onClick={()=>requireAuth()&&setShowMessages(true)}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
+    <nav className="bottom-nav"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false)}}>⌂<span>Eksploro</span></button><button onClick={()=>requireAuth()&&setCategory("Të gjitha")}>♡<span>Ruajturat</span></button><button onClick={()=>setShowGive(true)} className="nav-add">＋</button><button onClick={()=>requireAuth()&&setShowMessages(true)}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
   </main>;
 }
 
