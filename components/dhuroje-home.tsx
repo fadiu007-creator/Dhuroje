@@ -159,9 +159,15 @@ export default function DhurojeHome(){
       if(!claimRow){setError("Së pari dërgo një kërkesë për këtë dhuratë. Kështu dhuruesi e di kush po e kërkon.");return;}
       if(claimRow.status==="declined"||claimRow.status==="cancelled"||claimRow.status==="no_show"){setError("Kjo kërkesë nuk është më aktive.");return;}
     }
-    const existing=await supabase.from("dhuroje_conversations").select("id").eq("listing_id",listing.id).maybeSingle();
-    if(existing.error){setError(existing.error.message);return;}
-    let cid=existing.data?.id;
+    const existingMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",currentUser.id).limit(1);
+    if(existingMember.error){setError(existingMember.error.message);return;}
+    let cid:string|undefined;
+    const memberIds=(existingMember.data||[]).map((x:any)=>x.conversation_id);
+    if(memberIds.length){
+      const existingConversation=await supabase.from("dhuroje_conversations").select("id").in("id",memberIds).eq("listing_id",listing.id).limit(1).maybeSingle();
+      if(existingConversation.error){setError(existingConversation.error.message);return;}
+      cid=existingConversation.data?.id;
+    }
     if(!cid){
       const {data:c,error:e}=await supabase.from("dhuroje_conversations").insert({listing_id:listing.id}).select("id").single();
       if(e||!c){setError(e?.message||"Nuk u krijua biseda.");return;}
@@ -244,7 +250,7 @@ function Dashboard({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged
   async function load(){
     if(!user)return;
     const {data:ls}=await supabase.from("dhuroje_listings").select("*").eq("owner_id",user.id).order("created_at",{ascending:false});setMine(ls||[]);
-    const {data:cs}=await supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*)").order("created_at",{ascending:false});setIncoming((cs||[]).filter((x:any)=>x.listing?.owner_id===user.id));
+    const {data:cs}=await supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*), claimant:dhuroje_profiles(display_name)").order("created_at",{ascending:false});setIncoming((cs||[]).filter((x:any)=>x.listing?.owner_id===user.id));
   }
   useEffect(()=>{load();},[]);
   async function action(c:Claim,status:string){
@@ -257,5 +263,5 @@ function Dashboard({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged
   async function setListing(id:string,status:string){setBusy(true);await supabase.from("dhuroje_listings").update({status}).eq("id",id).eq("owner_id",user.id);await load();onChanged();setBusy(false);}
   return <div className="modal-backdrop"><div className="modal dashboard"><div className="modal-head"><div><p className="eyebrow">LLOGARIA IME</p><h2>Paneli im</h2></div><button className="close" onClick={onClose}>×</button></div><div className="dash-tabs"><button className={tab==="my"?"active":""} onClick={()=>setTab("my")}>Shpalljet e mia ({mine.length})</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Kërkesat ({incoming.filter(x=>x.status==="pending").length})</button></div>
   {tab==="my"?<div className="dash-list">{mine.length?mine.map(x=><div className="dash-row" key={x.id}><span className="dash-icon">{emoji(x.category)}</span><div><b>{x.title}</b><small>{x.status==="available"?"E disponueshme":x.status==="reserved"?"E rezervuar":x.status==="collected"?"E dhuruar":"Jo aktive"}</small></div>{x.status==="available"&&<button disabled={busy} onClick={()=>setListing(x.id,"removed")}>Hiqe</button>}{x.status==="reserved"&&<button disabled={busy} onClick={()=>setListing(x.id,"collected")}>U mor</button>}</div>):<div className="empty">Nuk ke publikuar ende asgjë.</div>}</div>
-  :<div className="dash-list">{incoming.length?incoming.map(c=><div className="dash-row" key={c.id}><span className="dash-icon">{emoji(c.listing?.category||"other")}</span><div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Kërkesë e re":c.status}</small></div>{c.status==="pending"&&<><button disabled={busy} className="accept" onClick={()=>action(c,"accepted")}>Prano</button><button disabled={busy} onClick={()=>action(c,"declined")}>Refuzo</button></>}</div>):<div className="empty">Nuk ke kërkesa ende.</div>}</div>}</div></div>;
+  :<div className="dash-list">{incoming.length?incoming.map(c=><div className="dash-row" key={c.id}><span className="dash-icon">{emoji(c.listing?.category||"other")}</span><div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Kërkesë e re":c.status} · Nga {c.claimant?.display_name||"përdorues i regjistruar"}</small></div>{c.status==="pending"&&<><button disabled={busy} className="accept" onClick={()=>action(c,"accepted")}>Prano</button><button disabled={busy} onClick={()=>action(c,"declined")}>Refuzo</button></>}</div>):<div className="empty">Nuk ke kërkesa ende.</div>}</div>}</div></div>;
 }
