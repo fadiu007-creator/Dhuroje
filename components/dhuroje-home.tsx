@@ -150,38 +150,42 @@ export default function DhurojeHome(){
     setPosting(false);
     if(ok){setShowGive(false);await load();}
   }
-  async function startChat(listing:Listing){
+  async function startChat(listing:Listing,targetUserId?:string){
     const currentUser=await requireAuthenticatedUser();
     if(!currentUser)return;
+    let otherUserId=targetUserId;
     if(listing.owner_id!==currentUser.id){
       const {data:claimRow,error:claimError}=await supabase.from("dhuroje_claims").select("id,status").eq("listing_id",listing.id).eq("claimant_id",currentUser.id).maybeSingle();
       if(claimError){setError(claimError.message);return;}
       if(!claimRow){setError("Së pari dërgo një kërkesë për këtë dhuratë. Kështu dhuruesi e di kush po e kërkon.");return;}
-      if(claimRow.status==="declined"||claimRow.status==="cancelled"||claimRow.status==="no_show"){setError("Kjo kërkesë nuk është më aktive.");return;}
+      if(["declined","cancelled","no_show"].includes(claimRow.status)){setError("Kjo kërkesë nuk është më aktive.");return;}
+      otherUserId=listing.owner_id;
+    } else if(!otherUserId){
+      setError("Për të kontaktuar një kërkues, hape kërkesën te Paneli im dhe zgjidh Mesazho.");
+      return;
     }
+    if(otherUserId===currentUser.id){setError("Nuk mund të hapësh bisedë me veten.");return;}
     const existingMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",currentUser.id);
     if(existingMember.error){setError(existingMember.error.message);return;}
     let cid:string|undefined;
     const memberIds=(existingMember.data||[]).map((x:any)=>x.conversation_id);
     if(memberIds.length){
-      const existingConversation=await supabase.from("dhuroje_conversations").select("id").in("id",memberIds).eq("listing_id",listing.id).limit(1).maybeSingle();
-      if(existingConversation.error){setError(existingConversation.error.message);return;}
-      cid=existingConversation.data?.id;
+      const targetMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").in("conversation_id",memberIds).eq("user_id",otherUserId);
+      if(targetMember.error){setError(targetMember.error.message);return;}
+      const pairIds=(targetMember.data||[]).map((x:any)=>x.conversation_id);
+      if(pairIds.length){
+        const existingConversation=await supabase.from("dhuroje_conversations").select("id").in("id",pairIds).eq("listing_id",listing.id).limit(1).maybeSingle();
+        if(existingConversation.error){setError(existingConversation.error.message);return;}
+        cid=existingConversation.data?.id;
+      }
     }
     if(!cid){
-      // Insert first, then add membership. Do not use .select() here: the
-      // conversation SELECT policy intentionally hides rows until membership exists.
       cid=crypto.randomUUID();
       const {error:e}=await supabase.from("dhuroje_conversations").insert({id:cid,listing_id:listing.id});
       if(e){setError(e.message||"Nuk u krijua biseda.");return;}
-      const members=[{conversation_id:cid,user_id:currentUser.id}];
-      if(listing.owner_id!==currentUser.id)members.push({conversation_id:cid,user_id:listing.owner_id});
+      const members=[{conversation_id:cid,user_id:currentUser.id},{conversation_id:cid,user_id:otherUserId}];
       const {error:me}=await supabase.from("dhuroje_conversation_members").insert(members);
-      if(me){
-        await supabase.from("dhuroje_conversation_members").delete().eq("conversation_id",cid);
-        await supabase.from("dhuroje_conversations").delete().eq("id",cid);
-        setError(me.message);return;
-      }
+      if(me){setError(me.message);return;}
     }
     setShowMessages(true);
   }
@@ -251,7 +255,7 @@ function Messages({user,onClose}:{user:any;onClose:()=>void}){
   return <div className="modal-backdrop"><div className="modal messages-modal"><div className="modal-head"><h2>Mesazhet</h2><button className="close" onClick={onClose}>×</button></div>{!convos.length?<div className="empty">Nuk ke ende biseda.</div>:<div className="message-list">{convos.map(c=><button key={c.id} onClick={()=>setSelected(c)}>💬 Bisedë · {new Date(c.created_at).toLocaleDateString("sq-AL")}</button>)}</div>}{selected&&<><div className="chat-messages">{messages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>{m.body}<small>{new Date(m.created_at).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"})}</small></div>)}</div><div className="composer"><input value={body} onChange={e=>setBody(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Shkruaj mesazh..."/><button className="primary" onClick={send}>Dërgo</button></div></>}</div></div>;
 }
 
-function Dashboard({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
+function Dashboard({user,onClose,onChanged,onChat}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void}){
   const [tab,setTab]=useState<"my"|"requests">("my"),[mine,setMine]=useState<Listing[]>([]),[incoming,setIncoming]=useState<Claim[]>([]),[busy,setBusy]=useState(false);
   async function load(){
     if(!user)return;
@@ -269,5 +273,5 @@ function Dashboard({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged
   async function setListing(id:string,status:string){setBusy(true);await supabase.from("dhuroje_listings").update({status}).eq("id",id).eq("owner_id",user.id);await load();onChanged();setBusy(false);}
   return <div className="modal-backdrop"><div className="modal dashboard"><div className="modal-head"><div><p className="eyebrow">LLOGARIA IME</p><h2>Paneli im</h2></div><button className="close" onClick={onClose}>×</button></div><div className="dash-tabs"><button className={tab==="my"?"active":""} onClick={()=>setTab("my")}>Shpalljet e mia ({mine.length})</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Kërkesat ({incoming.filter(x=>x.status==="pending").length})</button></div>
   {tab==="my"?<div className="dash-list">{mine.length?mine.map(x=><div className="dash-row" key={x.id}><span className="dash-icon">{emoji(x.category)}</span><div><b>{x.title}</b><small>{x.status==="available"?"E disponueshme":x.status==="reserved"?"E rezervuar":x.status==="collected"?"E dhuruar":"Jo aktive"}</small></div>{x.status==="available"&&<button disabled={busy} onClick={()=>setListing(x.id,"removed")}>Hiqe</button>}{x.status==="reserved"&&<button disabled={busy} onClick={()=>setListing(x.id,"collected")}>U mor</button>}</div>):<div className="empty">Nuk ke publikuar ende asgjë.</div>}</div>
-  :<div className="dash-list">{incoming.length?incoming.map(c=><div className="dash-row" key={c.id}><span className="dash-icon">{emoji(c.listing?.category||"other")}</span><div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Kërkesë e re":c.status} · Nga {c.claimant?.display_name||"përdorues i regjistruar"}</small></div>{c.status==="pending"&&<><button disabled={busy} className="accept" onClick={()=>action(c,"accepted")}>Prano</button><button disabled={busy} onClick={()=>action(c,"declined")}>Refuzo</button></>}</div>):<div className="empty">Nuk ke kërkesa ende.</div>}</div>}</div></div>;
+  :<div className="dash-list">{incoming.length?incoming.map(c=><div className="dash-row" key={c.id}><span className="dash-icon">{emoji(c.listing?.category||"other")}</span><div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Kërkesë e re":c.status} · Nga {c.claimant?.display_name||"përdorues i regjistruar"}</small></div>{c.claimant_id&&<button disabled={busy} onClick={()=>c.listing&&onChat(c.listing,c.claimant_id)}>💬 Mesazho</button>}{c.status==="pending"&&<><button disabled={busy} className="accept" onClick={()=>action(c,"accepted")}>Prano</button><button disabled={busy} onClick={()=>action(c,"declined")}>Refuzo</button></>}</div>):<div className="empty">Nuk ke kërkesa ende.</div>}</div>}</div></div>;
 }
