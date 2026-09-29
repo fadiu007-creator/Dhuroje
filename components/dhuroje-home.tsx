@@ -76,7 +76,13 @@ export default function DhurojeHome(){
     return a;
   },[listings,category,query,coords,nearbyOnly]);
 
-  function requireAuth(){if(!user){setShowAuth(true);return false;}return true;}
+  async function requireAuthenticatedUser(){
+    const {data,error:e}=await supabase.auth.getUser();
+    if(e||!data.user){setShowAuth(true);setAuthMode("login");return null;}
+    if(!user||user.id!==data.user.id)setUser(data.user);
+    return data.user;
+  }
+  function requireAuth(){if(!user){setShowAuth(true);setAuthMode("login");return false;}return true;}
   async function auth(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
@@ -106,9 +112,16 @@ export default function DhurojeHome(){
     else{await supabase.from("dhuroje_favorites").insert({user_id:user.id,listing_id:id});setFavorites(x=>[...x,id]);}
   }
   async function claim(id:string){
-    if(!requireAuth())return;if(claims.includes(id))return;
-    const {error:e}=await supabase.from("dhuroje_claims").insert({listing_id:id,claimant_id:user.id,status:"pending"});
-    if(e){setError(e.message);return;}setClaims(x=>[...x,id]);
+    const currentUser=await requireAuthenticatedUser();
+    if(!currentUser)return;
+    if(claims.includes(id))return;
+    const listing=listings.find(x=>x.id===id)||activeListing;
+    if(!listing)return;
+    if(listing.owner_id===currentUser.id){setError("Nuk mund të kërkosh dhuratën tënde.");return;}
+    if(listing.status!=="available"){setError("Kjo dhuratë nuk është më e disponueshme.");return;}
+    const {error:e}=await supabase.from("dhuroje_claims").insert({listing_id:id,claimant_id:currentUser.id,status:"pending"});
+    if(e){setError(e.message);return;}
+    setClaims(x=>[...x,id]);
   }
   async function finishListing(postingUser:any,f:FormData){
     const files=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
@@ -138,10 +151,26 @@ export default function DhurojeHome(){
     if(ok){setShowGive(false);await load();}
   }
   async function startChat(listing:Listing){
-    if(!requireAuth())return;
-    const existing=await supabase.from("dhuroje_conversations").select("id").eq("listing_id",listing.id).limit(1).maybeSingle();
+    const currentUser=await requireAuthenticatedUser();
+    if(!currentUser)return;
+    if(listing.owner_id!==currentUser.id){
+      const {data:claimRow,error:claimError}=await supabase.from("dhuroje_claims").select("id,status").eq("listing_id",listing.id).eq("claimant_id",currentUser.id).maybeSingle();
+      if(claimError){setError(claimError.message);return;}
+      if(!claimRow){setError("Së pari dërgo një kërkesë për këtë dhuratë. Kështu dhuruesi e di kush po e kërkon.");return;}
+      if(claimRow.status==="declined"||claimRow.status==="cancelled"||claimRow.status==="no_show"){setError("Kjo kërkesë nuk është më aktive.");return;}
+    }
+    const existing=await supabase.from("dhuroje_conversations").select("id").eq("listing_id",listing.id).maybeSingle();
+    if(existing.error){setError(existing.error.message);return;}
     let cid=existing.data?.id;
-    if(!cid){const {data:c,error:e}=await supabase.from("dhuroje_conversations").insert({listing_id:listing.id}).select("id").single();if(e){setError(e.message);return;}cid=c.id;await supabase.from("dhuroje_conversation_members").insert([{conversation_id:cid,user_id:user.id},{conversation_id:cid,user_id:listing.owner_id}]);}
+    if(!cid){
+      const {data:c,error:e}=await supabase.from("dhuroje_conversations").insert({listing_id:listing.id}).select("id").single();
+      if(e||!c){setError(e?.message||"Nuk u krijua biseda.");return;}
+      cid=c.id;
+      const members=[{conversation_id:cid,user_id:currentUser.id}];
+      if(listing.owner_id!==currentUser.id)members.push({conversation_id:cid,user_id:listing.owner_id});
+      const {error:me}=await supabase.from("dhuroje_conversation_members").insert(members);
+      if(me){await supabase.from("dhuroje_conversations").delete().eq("id",cid);setError(me.message);return;}
+    }
     setShowMessages(true);
   }
   function openPosting(){
