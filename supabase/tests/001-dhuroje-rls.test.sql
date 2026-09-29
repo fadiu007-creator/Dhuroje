@@ -23,6 +23,11 @@ values
   (tests.get_supabase_uid('dhuroje-owner@test.local'),
    'RLS test donation','test','other','available');
 
+set local role anon;
+select is((select count(*) from public.dhuroje_claims),0::bigint,'Anonymous users cannot read claims');
+select is((select count(*) from public.dhuroje_conversations),0::bigint,'Anonymous users cannot read conversations');
+reset role;
+
 select tests.authenticate_as('dhuroje-requester@test.local');
 
 select lives_ok(
