@@ -159,7 +159,7 @@ export default function DhurojeHome(){
       if(!claimRow){setError("Së pari dërgo një kërkesë për këtë dhuratë. Kështu dhuruesi e di kush po e kërkon.");return;}
       if(claimRow.status==="declined"||claimRow.status==="cancelled"||claimRow.status==="no_show"){setError("Kjo kërkesë nuk është më aktive.");return;}
     }
-    const existingMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",currentUser.id).limit(1);
+    const existingMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",currentUser.id);
     if(existingMember.error){setError(existingMember.error.message);return;}
     let cid:string|undefined;
     const memberIds=(existingMember.data||[]).map((x:any)=>x.conversation_id);
