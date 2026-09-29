@@ -169,13 +169,19 @@ export default function DhurojeHome(){
       cid=existingConversation.data?.id;
     }
     if(!cid){
-      const {data:c,error:e}=await supabase.from("dhuroje_conversations").insert({listing_id:listing.id}).select("id").single();
-      if(e||!c){setError(e?.message||"Nuk u krijua biseda.");return;}
-      cid=c.id;
+      // Insert first, then add membership. Do not use .select() here: the
+      // conversation SELECT policy intentionally hides rows until membership exists.
+      cid=crypto.randomUUID();
+      const {error:e}=await supabase.from("dhuroje_conversations").insert({id:cid,listing_id:listing.id});
+      if(e){setError(e.message||"Nuk u krijua biseda.");return;}
       const members=[{conversation_id:cid,user_id:currentUser.id}];
       if(listing.owner_id!==currentUser.id)members.push({conversation_id:cid,user_id:listing.owner_id});
       const {error:me}=await supabase.from("dhuroje_conversation_members").insert(members);
-      if(me){await supabase.from("dhuroje_conversations").delete().eq("id",cid);setError(me.message);return;}
+      if(me){
+        await supabase.from("dhuroje_conversation_members").delete().eq("conversation_id",cid);
+        await supabase.from("dhuroje_conversations").delete().eq("id",cid);
+        setError(me.message);return;
+      }
     }
     setShowMessages(true);
   }
