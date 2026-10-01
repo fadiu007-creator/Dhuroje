@@ -8,6 +8,7 @@ type Listing = {
   id:string; owner_id:string; title:string; description:string; category:string; status:string;
   location_name:string|null; latitude:number|null; longitude:number|null; available_until:string|null;
   food_best_before:string|null; food_refrigerated:boolean|null; food_opened:boolean|null; created_at:string;
+  owner?:{display_name:string|null; avatar_url?:string|null}|null;
 };
 type Image = { id:string; listing_id:string; storage_path:string; sort_order:number };
 type Claim = { id:string; listing_id:string; claimant_id:string; status:string; created_at:string; listing?:Listing; claimant?:{display_name:string} };
@@ -40,7 +41,14 @@ export default function DhurojeHome(){
     setLoading(true);
     const {data,error:e}=await supabase.from("dhuroje_listings").select("*").eq("status","available").order("created_at",{ascending:false});
     if(e)setError(e.message); else {
-      const ls=(data||[]) as Listing[]; setListings(ls);
+      const ls=(data||[]) as Listing[];
+      if(ls.length){
+        const ownerIds=[...new Set(ls.map(x=>x.owner_id))];
+        const {data:owners}=await supabase.from("dhuroje_profiles").select("id,display_name,avatar_url").in("id",ownerIds);
+        const ownerMap=Object.fromEntries((owners||[]).map((p:any)=>[p.id,p]));
+        ls.forEach(x=>{x.owner=ownerMap[x.owner_id]||null;});
+      }
+      setListings(ls);
       if(ls.length){
         const {data:ims}=await supabase.from("dhuroje_listing_images").select("*").in("listing_id",ls.map(x=>x.id)).order("sort_order");
         const grouped:Record<string,string[]>={};
@@ -150,6 +158,19 @@ export default function DhurojeHome(){
     setPosting(false);
     if(ok){setShowGive(false);await load();}
   }
+  async function deleteListing(listing:Listing){
+    const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
+    if(currentUser.id!==listing.owner_id){setError("Nuk mund ta fshish këtë shpallje.");return;}
+    if(!window.confirm("Ta fshijmë përgjithmonë këtë shpallje?"))return;
+    setError("");
+    const {data:ims}=await supabase.from("dhuroje_listing_images").select("storage_path").eq("listing_id",listing.id);
+    if(ims?.length)await supabase.storage.from("dhuroje-listings").remove(ims.map((x:any)=>x.storage_path));
+    await supabase.from("dhuroje_listing_images").delete().eq("listing_id",listing.id);
+    const {error:e}=await supabase.from("dhuroje_listings").delete().eq("id",listing.id).eq("owner_id",currentUser.id);
+    if(e){setError(e.message);return;}
+    if(activeListing?.id===listing.id)setActiveListing(null);
+    await load();
+  }
   async function quickEditListing(listing:Listing){
     const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
     const title=window.prompt("Titulli",listing.title); if(title===null)return;
@@ -229,7 +250,7 @@ export default function DhurojeHome(){
     {!mapMode&&<section className="listing-grid">{filtered.map(item=><article className="card" key={item.id} onClick={()=>setActiveListing(item)}>
       <div className="card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<b>FALAS</b><button className="heart" onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}}>{favorites.includes(item.id)?"♥":"♡"}</button></div>
       <div className="card-body"><div className="meta"><span>{categoryLabel[item.category]||item.category}</span><span>📍 {item.location_name||"Pranë teje"}</span></div><h3>{item.title}</h3><p>{item.description||"Pa përshkrim."}</p>
-      <div className="card-footer"><small>{coords&&distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!=null?distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!.toFixed(1)+" km · ":""}{item.available_until?"Deri "+new Date(item.available_until).toLocaleDateString("sq-AL"):"Sapo u postua"}</small>{user?.id!==item.owner_id&&<button className={claims.includes(item.id)?"claimed":"claim"} onClick={e=>{e.stopPropagation();claim(item.id)}}>{claims.includes(item.id)?"Kërkuar ✓":"Kërko"}</button>}</div></div>
+      <div className="card-footer"><small>{item.owner?.display_name||"Përdorues i regjistruar"} · {coords&&distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!=null?distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!.toFixed(1)+" km · ":""}{item.available_until?"Deri "+new Date(item.available_until).toLocaleDateString("sq-AL"):"Sapo u postua"}</small>{user?.id!==item.owner_id&&<button className={claims.includes(item.id)?"claimed":"claim"} onClick={e=>{e.stopPropagation();claim(item.id)}}>{claims.includes(item.id)?"Kërkuar ✓":"Kërko"}</button>}</div></div>
     </article>)}</section>}
     {!loading&&filtered.length===0&&<div className="empty">Nuk ka ende dhurata që përputhen me kërkimin.</div>}
 
@@ -250,8 +271,8 @@ export default function DhurojeHome(){
   </main>;
 }
 
-function ListingDetail({listing,image,saved,claimed,isOwner,onClose,onClaim,onSave,onChat,onEdit}:{listing:Listing;image?:string;saved:boolean;claimed:boolean;isOwner:boolean;onClose:()=>void;onClaim:()=>void;onSave:()=>void;onChat:()=>void;onEdit:()=>void}){
-  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><p className="eyebrow">{categoryLabel[listing.category]||listing.category}</p><h2>{listing.title}</h2></div><button className="close" onClick={onClose}>×</button></div>{image?<img className="detail-image" src={image} alt=""/>:<div className="detail-emoji">{emoji(listing.category)}</div>}<p>{listing.description||"Pa përshkrim."}</p><p>📍 {listing.location_name||"Pranë teje"}</p>{listing.food_best_before&&<p>🍎 Afati: {new Date(listing.food_best_before).toLocaleDateString("sq-AL")}</p>}<div className="detail-actions">{isOwner?<button className="primary" onClick={onEdit}>✏️ Ndrysho shpalljen</button>:<><button className="primary" onClick={onClaim}>{claimed?"Kërkesa u dërgua ✓":"Kërko këtë dhuratë"}</button><button className="secondary" onClick={onChat}>💬 Mesazho dhuruesin</button></>}<button className="secondary" onClick={onSave}>{saved?"♥ Ruajtur":"♡ Ruaje"}</button></div></div></div>;
+function ListingDetail({listing,image,saved,claimed,isOwner,onClose,onClaim,onSave,onChat,onEdit,onDelete}:{listing:Listing;image?:string;saved:boolean;claimed:boolean;isOwner:boolean;onClose:()=>void;onClaim:()=>void;onSave:()=>void;onChat:()=>void;onEdit:()=>void;onDelete:()=>void}){
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><p className="eyebrow">{categoryLabel[listing.category]||listing.category}</p><h2>{listing.title}</h2></div><button className="close" onClick={onClose}>×</button></div>{image?<img className="detail-image" src={image} alt=""/>:<div className="detail-emoji">{emoji(listing.category)}</div>}<p>{listing.description||"Pa përshkrim."}</p><p className="poster-line">👤 <strong>{listing.owner?.display_name||"Përdorues i regjistruar"}</strong> · Dhurues</p><p>📍 {listing.location_name||"Pranë teje"}</p>{listing.food_best_before&&<p>🍎 Afati: {new Date(listing.food_best_before).toLocaleDateString("sq-AL")}</p>}<div className="detail-actions">{isOwner?<><button className="primary" onClick={onEdit}>✏️ Ndrysho shpalljen</button><button className="secondary danger" onClick={onDelete}>🗑️ Fshi shpalljen</button></>:<><button className="primary" onClick={onClaim}>{claimed?"Kërkesa u dërgua ✓":"Kërko këtë dhuratë"}</button><button className="secondary" onClick={onChat}>💬 Mesazho dhuruesin</button></>}<button className="secondary" onClick={onSave}>{saved?"♥ Ruajtur":"♡ Ruaje"}</button></div></div></div>;
 }
 
 function Messages({user,onClose}:{user:any;onClose:()=>void}){
@@ -279,7 +300,17 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit}:{user:any;onClose:()=>
     if(!error){await load();onChanged();}else alert(error.message);setBusy(false);
   }
   async function setListing(id:string,status:string){setBusy(true);await supabase.from("dhuroje_listings").update({status}).eq("id",id).eq("owner_id",user.id);await load();onChanged();setBusy(false);}
+  async function deleteListing(listing:Listing){
+    if(!window.confirm("Ta fshijmë përgjithmonë këtë shpallje?"))return;
+    setBusy(true);
+    const {data:ims}=await supabase.from("dhuroje_listing_images").select("storage_path").eq("listing_id",listing.id);
+    if(ims?.length)await supabase.storage.from("dhuroje-listings").remove(ims.map((x:any)=>x.storage_path));
+    await supabase.from("dhuroje_listing_images").delete().eq("listing_id",listing.id);
+    const {error}=await supabase.from("dhuroje_listings").delete().eq("id",listing.id).eq("owner_id",user.id);
+    if(error)alert(error.message);
+    await load();onChanged();setBusy(false);
+  }
   return <div className="modal-backdrop"><div className="modal dashboard"><div className="modal-head"><div><p className="eyebrow">LLOGARIA IME</p><h2>Paneli im</h2></div><button className="close" onClick={onClose}>×</button></div><div className="dash-tabs"><button className={tab==="my"?"active":""} onClick={()=>setTab("my")}>Shpalljet e mia ({mine.length})</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Kërkesat ({incoming.filter(x=>x.status==="pending").length})</button></div>
-  {tab==="my"?<div className="dash-list">{mine.length?mine.map(x=><div className="dash-row" key={x.id}><span className="dash-icon">{emoji(x.category)}</span><div><b>{x.title}</b><small>{x.status==="available"?"E disponueshme":x.status==="reserved"?"E rezervuar":x.status==="collected"?"E dhuruar":"Jo aktive"}</small></div>{x.status==="available"&&<><button disabled={busy} onClick={()=>onEdit(x)}>✏️ Ndrysho</button><button disabled={busy} onClick={()=>setListing(x.id,"removed")}>Hiqe</button></>}{x.status==="reserved"&&<button disabled={busy} onClick={()=>setListing(x.id,"collected")}>U mor</button>}</div>):<div className="empty">Nuk ke publikuar ende asgjë.</div>}</div>
+  {tab==="my"?<div className="dash-list">{mine.length?mine.map(x=><div className="dash-row" key={x.id}><span className="dash-icon">{emoji(x.category)}</span><div><b>{x.title}</b><small>{x.status==="available"?"E disponueshme":x.status==="reserved"?"E rezervuar":x.status==="collected"?"E dhuruar":"Jo aktive"}</small></div>{x.status==="available"&&<><button disabled={busy} onClick={()=>onEdit(x)}>✏️ Ndrysho</button><button disabled={busy} className="danger" onClick={()=>deleteListing(x)}>🗑️ Fshi</button></>}{x.status==="reserved"&&<button disabled={busy} onClick={()=>setListing(x.id,"collected")}>U mor</button>}</div>):<div className="empty">Nuk ke publikuar ende asgjë.</div>}</div>
   :<div className="dash-list">{incoming.length?incoming.map(c=><div className="dash-row" key={c.id}><span className="dash-icon">{emoji(c.listing?.category||"other")}</span><div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Kërkesë e re":c.status} · Nga {c.claimant?.display_name||"përdorues i regjistruar"}</small></div>{c.claimant_id&&<button disabled={busy} onClick={()=>c.listing&&onChat(c.listing,c.claimant_id)}>💬 Mesazho</button>}{c.status==="pending"&&<><button disabled={busy} className="accept" onClick={()=>action(c,"accepted")}>Prano</button><button disabled={busy} onClick={()=>action(c,"declined")}>Refuzo</button></>}</div>):<div className="empty">Nuk ke kërkesa ende.</div>}</div>}</div></div>;
 }
