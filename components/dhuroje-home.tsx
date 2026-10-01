@@ -334,7 +334,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
   }
 
   const localDate=(v:string|null)=>v?new Date(v).toISOString().slice(0,16):"";
-  return <div className="modal-backdrop"><form className="modal" onSubmit={save}>
+  return <div className="modal-backdrop edit-modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal" onSubmit={save}>
     <div className="modal-head"><div><p className="eyebrow">EDITO SHPALLJEN</p><h2>Ndrysho shpalljen</h2></div><button type="button" className="close" onClick={onClose}>×</button></div>
     {error&&<div className="error">{error}</div>}
     <label>Çfarë po dhuron?<input name="title" defaultValue={listing.title} required /></label>
