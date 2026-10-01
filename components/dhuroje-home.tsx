@@ -354,41 +354,141 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
 }
 
 function Messages({user,onClose}:{user:any;onClose:()=>void}){
-  const [conversation,setConversation]=useState<any>(null),[body,setBody]=useState(""),[messages,setMessages]=useState<any[]>([]);
+  const [conversations,setConversations]=useState<any[]>([]);
+  const [messages,setMessages]=useState<any[]>([]);
+  const [selectedConversation,setSelectedConversation]=useState<string>("");
+  const [body,setBody]=useState("");
+  const [loading,setLoading]=useState(true);
+
   async function load(){
     if(!user)return;
-    const {data:members}=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",user.id);
-    const ids=(members||[]).map(x=>x.conversation_id);
-    if(!ids.length){setConversation(null);setMessages([]);return;}
-    const {data:cs}=await supabase.from("dhuroje_conversations").select("id,listing_id,created_at").in("id",ids).order("created_at",{ascending:false}).limit(1);
-    const c=cs?.[0]||null;
-    setConversation(c);
-    if(c){
-      const {data:ms}=await supabase.from("dhuroje_messages").select("*").eq("conversation_id",c.id).order("created_at");
-      setMessages(ms||[]);
-    }else setMessages([]);
+    setLoading(true);
+    const {data:members,error:memberError}=await supabase
+      .from("dhuroje_conversation_members")
+      .select("conversation_id")
+      .eq("user_id",user.id);
+    if(memberError){setLoading(false);return;}
+
+    const ids=(members||[]).map((x:any)=>x.conversation_id);
+    if(!ids.length){
+      setConversations([]);
+      setMessages([]);
+      setSelectedConversation("");
+      setLoading(false);
+      return;
+    }
+
+    const {data:cs}=await supabase
+      .from("dhuroje_conversations")
+      .select("id,listing_id,created_at")
+      .in("id",ids)
+      .order("created_at",{ascending:false});
+
+    const rows=cs||[];
+    const listingIds=rows.map((x:any)=>x.listing_id).filter(Boolean);
+    const {data:listingsData}=listingIds.length
+      ?await supabase.from("dhuroje_listings").select("id,title,owner_id").in("id",listingIds)
+      :{data:[] as any[]};
+
+    const {data:allMembers}=await supabase
+      .from("dhuroje_conversation_members")
+      .select("conversation_id,user_id")
+      .in("conversation_id",ids);
+
+    const otherIds=(allMembers||[])
+      .filter((m:any)=>m.user_id!==user.id)
+      .map((m:any)=>m.user_id);
+    const {data:profiles}=otherIds.length
+      ?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",[...new Set(otherIds)])
+      :{data:[] as any[]};
+
+    const listingMap=Object.fromEntries((listingsData||[]).map((x:any)=>[x.id,x]));
+    const profileMap=Object.fromEntries((profiles||[]).map((x:any)=>[x.id,x]));
+    const otherByConversation:Record<string,string>={};
+    (allMembers||[]).forEach((m:any)=>{
+      if(m.user_id!==user.id)otherByConversation[m.conversation_id]=m.user_id;
+    });
+
+    const enriched=rows.map((c:any)=>({
+      ...c,
+      listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
+      otherUserId:otherByConversation[c.id],
+      otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues"
+    }));
+    setConversations(enriched);
+
+    const {data:ms}=await supabase
+      .from("dhuroje_messages")
+      .select("*")
+      .in("conversation_id",ids)
+      .order("created_at",{ascending:true});
+    setMessages(ms||[]);
+
+    setSelectedConversation(current=>{
+      if(current&&ids.includes(current))return current;
+      return enriched[0]?.id||"";
+    });
+    setLoading(false);
   }
-  useEffect(()=>{load();},[]);
+
+  useEffect(()=>{load();},[user]);
+
   useEffect(()=>{
-    if(!conversation)return;
-    const ch=supabase.channel("msg-"+conversation.id)
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"dhuroje_messages",filter:"conversation_id=eq."+conversation.id},(p:any)=>setMessages(x=>[...x,p.new]))
+    if(!user)return;
+    const ch=supabase.channel("all-user-messages-"+user.id)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"dhuroje_messages"},()=>load())
       .subscribe();
     return()=>{supabase.removeChannel(ch);};
-  },[conversation]);
+  },[user]);
+
+  const selectedMessages=messages.filter(m=>m.conversation_id===selectedConversation);
+  const selected=conversations.find(c=>c.id===selectedConversation);
+
   async function send(){
-    if(!conversation||!body.trim())return;
     const text=body.trim();
-    const {error}=await supabase.from("dhuroje_messages").insert({conversation_id:conversation.id,sender_id:user.id,body:text});
-    if(error)alert(error.message);else setBody("");
+    if(!selectedConversation||!text)return;
+    const {error}=await supabase.from("dhuroje_messages").insert({
+      conversation_id:selectedConversation,
+      sender_id:user.id,
+      body:text
+    });
+    if(error)alert(error.message);
+    else{
+      setBody("");
+      await load();
+    }
   }
+
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
     <div className="modal messages-modal">
-      <div className="modal-head"><div><p className="eyebrow">MESAZHET</p><h2>Mesazhet</h2></div><button className="close" onClick={onClose}>×</button></div>
-      {!conversation?<div className="empty">Nuk ke ende mesazhe.</div>:<>
-        <div className="chat-messages">{messages.length?messages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>{m.body}<small>{new Date(m.created_at).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"})}</small></div>):<div className="empty">Nuk ka ende mesazhe në këtë bisedë.</div>}</div>
-        <div className="composer"><input value={body} onChange={e=>setBody(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Shkruaj mesazh..."/><button className="primary" onClick={send}>Dërgo</button></div>
-      </>}
+      <div className="modal-head">
+        <div><p className="eyebrow">MESAZHET</p><h2>Mesazhet</h2></div>
+        <button className="close" onClick={onClose}>×</button>
+      </div>
+
+      {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
+        <div className="empty">Nuk ke ende mesazhe.</div>:
+        <>
+          <label className="message-context">
+            <span>Postimi / kërkesa</span>
+            <select value={selectedConversation} onChange={e=>setSelectedConversation(e.target.value)}>
+              {conversations.map(c=><option key={c.id} value={c.id}>{c.listingTitle} · {c.otherName}</option>)}
+            </select>
+          </label>
+
+          <div className="chat-messages">
+            {selectedMessages.length?selectedMessages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>
+              {m.body}
+              <small>{new Date(m.created_at).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"})}</small>
+            </div>):<div className="empty">Nuk ka ende mesazhe për këtë kërkesë.</div>}
+          </div>
+
+          <div className="composer">
+            <input value={body} onChange={e=>setBody(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={"Shkruaj për "+(selected?.otherName||"përdoruesin")+"…"} />
+            <button className="primary" onClick={send}>Dërgo</button>
+          </div>
+        </>
+      }
     </div>
   </div>;
 }
