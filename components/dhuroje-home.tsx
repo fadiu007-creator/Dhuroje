@@ -39,15 +39,9 @@ export default function DhurojeHome(){
 
   async function load(){
     setLoading(true);
-    const {data,error:e}=await supabase.from("dhuroje_listings").select("*").eq("status","available").order("created_at",{ascending:false});
+    const {data,error:e}=await supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("status","available").order("created_at",{ascending:false});
     if(e)setError(e.message); else {
       const ls=(data||[]) as Listing[];
-      if(ls.length){
-        const ownerIds=[...new Set(ls.map(x=>x.owner_id))];
-        const {data:owners}=await supabase.from("dhuroje_profiles").select("id,display_name,avatar_url").in("id",ownerIds);
-        const ownerMap=Object.fromEntries((owners||[]).map((p:any)=>[p.id,p]));
-        ls.forEach(x=>{x.owner=ownerMap[x.owner_id]||null;});
-      }
       setListings(ls);
       if(ls.length){
         const {data:ims}=await supabase.from("dhuroje_listing_images").select("*").in("listing_id",ls.map(x=>x.id)).order("sort_order");
