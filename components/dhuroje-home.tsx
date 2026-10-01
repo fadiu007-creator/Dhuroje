@@ -275,6 +275,80 @@ function ListingDetail({listing,image,saved,claimed,isOwner,onClose,onClaim,onSa
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><p className="eyebrow">{categoryLabel[listing.category]||listing.category}</p><h2>{listing.title}</h2></div><button className="close" onClick={onClose}>×</button></div>{image?<img className="detail-image" src={image} alt=""/>:<div className="detail-emoji">{emoji(listing.category)}</div>}<p>{listing.description||"Pa përshkrim."}</p><p className="poster-line">👤 <strong>{listing.owner?.display_name||"Përdorues i regjistruar"}</strong> · Dhurues</p><p>📍 {listing.location_name||"Pranë teje"}</p><p>🕒 Postuar më {new Date(listing.created_at).toLocaleDateString("sq-AL")}</p>{listing.available_until&&<p>📅 E disponueshme deri më {new Date(listing.available_until).toLocaleString("sq-AL",{dateStyle:"medium",timeStyle:"short"})}</p>}{listing.food_best_before&&<p>🍎 Afati: {new Date(listing.food_best_before).toLocaleDateString("sq-AL")}</p>}{listing.food_refrigerated&&<p>❄️ Kërkon frigorifer</p>}{listing.food_opened&&<p>📦 E hapur</p>}<div className="detail-actions">{isOwner?<><button className="primary" onClick={onEdit}>✏️ Ndrysho shpalljen</button><button className="secondary" onClick={onMarkGiven}>✓ Shëno si të dhuruar</button><button className="secondary danger" onClick={onDelete}>🗑️ Fshi shpalljen</button></>:<><button className="primary" onClick={onClaim}>{claimed?"Kërkesa u dërgua ✓":"Kërko këtë dhuratë"}</button><button className="secondary" onClick={onChat}>💬 Mesazho dhuruesin</button></>}<button className="secondary" onClick={onSave}>{saved?"♥ Ruajtur":"♡ Ruaje"}</button></div></div></div>;
 }
 
+function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=>void;onSaved:()=>Promise<void>}){
+  const [category,setCategory]=useState(listing.category);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
+  const [photos,setPhotos]=useState<any[]>([]);
+  const [newFiles,setNewFiles]=useState<File[]>([]);
+  const [removePhotoIds,setRemovePhotoIds]=useState<string[]>([]);
+  const [locationName,setLocationName]=useState(listing.location_name||"");
+  const [lat,setLat]=useState<number|null>(listing.latitude);
+  const [lon,setLon]=useState<number|null>(listing.longitude);
+
+  useEffect(()=>{
+    supabase.from("dhuroje_listing_images").select("*").eq("listing_id",listing.id).order("sort_order").then(({data})=>{
+      setPhotos((data||[]).map((x:any)=>({...x,url:supabase.storage.from("dhuroje-listings").getPublicUrl(x.storage_path).data.publicUrl})));
+    });
+  },[listing.id]);
+
+  function captureLocation(){
+    if(!navigator.geolocation){setError("Ky shfletues nuk mbështet lokacionin.");return;}
+    navigator.geolocation.getCurrentPosition(p=>{setLat(p.coords.latitude);setLon(p.coords.longitude);setLocationName("Lokacioni im");},()=>setError("Lokacioni nuk u lejua."));
+  }
+
+  async function save(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();setSaving(true);setError("");
+    const f=new FormData(e.currentTarget);
+    const categoryValue=String(f.get("category"));
+    const isFood=categoryValue==="food";
+    const {error:e1}=await supabase.from("dhuroje_listings").update({
+      title:String(f.get("title")||"").trim(),
+      description:String(f.get("description")||"").trim(),
+      category:categoryValue,
+      location_name:String(f.get("location_name")||"").trim()||null,
+      latitude:lat,longitude:lon,
+      available_until:f.get("available_until")?new Date(String(f.get("available_until"))).toISOString():null,
+      food_best_before:isFood&&f.get("food_best_before")?new Date(String(f.get("food_best_before"))).toISOString():null,
+      food_refrigerated:isFood&&f.get("food_refrigerated")==="on",
+      food_opened:isFood&&f.get("food_opened")==="on"
+    }).eq("id",listing.id).eq("owner_id",(await supabase.auth.getUser()).data.user?.id||"");
+    if(e1){setError(e1.message);setSaving(false);return;}
+
+    const removeRows=photos.filter(x=>removePhotoIds.includes(x.id));
+    if(removeRows.length){
+      await supabase.from("dhuroje_listing_images").delete().in("id",removeRows.map(x=>x.id));
+      await supabase.storage.from("dhuroje-listings").remove(removeRows.map(x=>x.storage_path));
+    }
+    const remaining=photos.filter(x=>!removePhotoIds.includes(x.id));
+    for(let i=0;i<Math.min(newFiles.length,6);i++){
+      const file=newFiles[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg";
+      const path=listing.owner_id+"/"+listing.id+"/"+(remaining.length+i)+"-"+crypto.randomUUID()+"."+ext;
+      const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
+      if(up.error){setError(up.error.message);setSaving(false);return;}
+      const ins=await supabase.from("dhuroje_listing_images").insert({listing_id:listing.id,storage_path:path,sort_order:remaining.length+i});
+      if(ins.error){setError(ins.error.message);setSaving(false);return;}
+    }
+    setSaving(false);
+    await onSaved();
+  }
+
+  const localDate=(v:string|null)=>v?new Date(v).toISOString().slice(0,16):"";
+  return <div className="modal-backdrop"><form className="modal" onSubmit={save}>
+    <div className="modal-head"><div><p className="eyebrow">EDITO SHPALLJEN</p><h2>Ndrysho shpalljen</h2></div><button type="button" className="close" onClick={onClose}>×</button></div>
+    {error&&<div className="error">{error}</div>}
+    <label>Çfarë po dhuron?<input name="title" defaultValue={listing.title} required /></label>
+    <label>Kategoria<select name="category" value={category} onChange={e=>setCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x} value={categoryDb[x]}>{x}</option>)}</select></label>
+    <label>Përshkrimi<textarea name="description" defaultValue={listing.description||""}/></label>
+    <label>Lokacioni<input name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} placeholder="Qyteti / zona" /></label>
+    <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
+    <label>Disponueshme deri<input name="available_until" type="datetime-local" defaultValue={localDate(listing.available_until)}/></label>
+    {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><label>Afati i ushqimit<input name="food_best_before" type="datetime-local" defaultValue={localDate(listing.food_best_before)}/></label><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
+    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={e=>setNewFiles(Array.from(e.target.files||[]).slice(0,6))}/></label></div>
+    <button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj ndryshimet"}</button>
+  </form></div>;
+}
+
 function Messages({user,onClose}:{user:any;onClose:()=>void}){
   const [convos,setConvos]=useState<any[]>([]),[selected,setSelected]=useState<any>(null),[body,setBody]=useState(""),[messages,setMessages]=useState<any[]>([]);
   async function load(){if(!user)return;const {data}=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",user.id);const ids=(data||[]).map(x=>x.conversation_id);if(!ids.length){setConvos([]);return;}const {data:cs}=await supabase.from("dhuroje_conversations").select("id,listing_id,created_at").in("id",ids).order("created_at",{ascending:false});setConvos(cs||[]);}
