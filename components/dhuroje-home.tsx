@@ -164,10 +164,9 @@ export default function DhurojeHome(){
     if(!window.confirm("Ta fshijmë përgjithmonë këtë shpallje?"))return;
     setError("");
     const {data:ims}=await supabase.from("dhuroje_listing_images").select("storage_path").eq("listing_id",listing.id);
+    const {data:deleted,error:e}=await supabase.rpc("dhuroje_delete_listing",{p_listing_id:listing.id});
+    if(e||!deleted){setError(e?.message||"Shpallja nuk u fshi.");return;}
     if(ims?.length)await supabase.storage.from("dhuroje-listings").remove(ims.map((x:any)=>x.storage_path));
-    await supabase.from("dhuroje_listing_images").delete().eq("listing_id",listing.id);
-    const {error:e}=await supabase.from("dhuroje_listings").delete().eq("id",listing.id).eq("owner_id",currentUser.id);
-    if(e){setError(e.message);return;}
     if(activeListing?.id===listing.id)setActiveListing(null);
     await load();
   }
@@ -303,11 +302,8 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit}:{user:any;onClose:()=>
   async function deleteListing(listing:Listing){
     if(!window.confirm("Ta fshijmë përgjithmonë këtë shpallje?"))return;
     setBusy(true);
-    const {data:ims}=await supabase.from("dhuroje_listing_images").select("storage_path").eq("listing_id",listing.id);
-    if(ims?.length)await supabase.storage.from("dhuroje-listings").remove(ims.map((x:any)=>x.storage_path));
-    await supabase.from("dhuroje_listing_images").delete().eq("listing_id",listing.id);
-    const {error}=await supabase.from("dhuroje_listings").delete().eq("id",listing.id).eq("owner_id",user.id);
-    if(error)alert(error.message);
+    const {data:deleted,error}=await supabase.rpc("dhuroje_delete_listing",{p_listing_id:listing.id});
+    if(error||!deleted)alert(error?.message||"Shpallja nuk u fshi.");
     await load();onChanged();setBusy(false);
   }
   return <div className="modal-backdrop"><div className="modal dashboard"><div className="modal-head"><div><p className="eyebrow">LLOGARIA IME</p><h2>Paneli im</h2></div><button className="close" onClick={onClose}>×</button></div><div className="dash-tabs"><button className={tab==="my"?"active":""} onClick={()=>setTab("my")}>Shpalljet e mia ({mine.length})</button><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Kërkesat ({incoming.filter(x=>x.status==="pending").length})</button></div>
