@@ -409,23 +409,27 @@ function Messages({user,onClose}:{user:any;onClose:()=>void}){
       if(m.user_id!==user.id)otherByConversation[m.conversation_id]=m.user_id;
     });
 
-    const enriched=rows.map((c:any)=>({
-      ...c,
-      listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
-      otherUserId:otherByConversation[c.id],
-      otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues"
-    }));
-    setConversations(enriched);
-
     const {data:ms}=await supabase
       .from("dhuroje_messages")
       .select("*")
       .in("conversation_id",ids)
       .order("created_at",{ascending:true});
+    const sentOrReceivedIds=new Set((ms||[]).map((m:any)=>m.conversation_id));
+
+    // Only show conversations where an actual message has been sent or received.
+    const enriched=rows
+      .filter((c:any)=>sentOrReceivedIds.has(c.id))
+      .map((c:any)=>({
+        ...c,
+        listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
+        otherUserId:otherByConversation[c.id],
+        otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues"
+      }));
+    setConversations(enriched);
     setMessages(ms||[]);
 
     setSelectedConversation(current=>{
-      if(current&&ids.includes(current))return current;
+      if(current&&enriched.some(c=>c.id===current))return current;
       return enriched[0]?.id||"";
     });
     setLoading(false);
