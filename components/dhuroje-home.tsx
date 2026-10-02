@@ -295,30 +295,17 @@ export default function DhurojeHome(){
 
 function PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onClose:()=>void;onChat?:()=>void;onListing?:(listing:Listing)=>void}){
   const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[posts,setPosts]=useState<Listing[]>([]),[postImages,setPostImages]=useState<Record<string,string>>({});
-  useEffect(()=>{(async()=>{
-    const [p,r,l]=await Promise.all([
-      supabase.from("dhuroje_profiles").select("*").eq("id",userId).maybeSingle(),
-      supabase.from("dhuroje_reviews").select("*").eq("reviewed_id",userId).order("created_at",{ascending:false}),
-      supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("owner_id",userId).in("status",["available","reserved"]).order("created_at",{ascending:false})
-    ]);
-    const ids=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];
-    const {data:rp}=ids.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",ids):{data:[] as any[]};
-    const map=Object.fromEntries((rp||[]).map((x:any)=>[x.id,x]));
-    const ls=(l.data||[]) as Listing[];
-    if(ls.length){
-      const {data:ims}=await supabase.from("dhuroje_listing_images").select("listing_id,storage_path,sort_order").in("listing_id",ls.map(x=>x.id)).order("sort_order");
-      const first:Record<string,string>={};
-      (ims||[]).forEach((im:any)=>{if(!first[im.listing_id])first[im.listing_id]=supabase.storage.from("dhuroje-listings").getPublicUrl(im.storage_path).data.publicUrl;});
-      setPostImages(first);
-    }else setPostImages({});
-    setProfile(p.data);setReviews((r.data||[]).map((x:any)=>({...x,reviewer:map[x.reviewer_id]})));setPosts(ls);
-  })()},[userId]);
+  useEffect(()=>{(async()=>{const [p,r,l]=await Promise.all([
+    supabase.from("dhuroje_profiles").select("*").eq("id",userId).maybeSingle(),
+    supabase.from("dhuroje_reviews").select("*").eq("reviewed_id",userId).order("created_at",{ascending:false}),
+    supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("owner_id",userId).in("status",["available","reserved"]).order("created_at",{ascending:false})
+  ]);const ids=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];const {data:rp}=ids.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",ids):{data:[] as any[]};const map=Object.fromEntries((rp||[]).map((x:any)=>[x.id,x]));const ls=(l.data||[]) as Listing[];if(ls.length){const {data:ims}=await supabase.from("dhuroje_listing_images").select("listing_id,storage_path,sort_order").in("listing_id",ls.map(x=>x.id)).order("sort_order");const first:Record<string,string>={};(ims||[]).forEach((im:any)=>{if(!first[im.listing_id])first[im.listing_id]=supabase.storage.from("dhuroje-listings").getPublicUrl(im.storage_path).data.publicUrl;});setPostImages(first);}setProfile(p.data);setReviews((r.data||[]).map((x:any)=>({...x,reviewer:map[x.reviewer_id]})));setPosts(ls);})()},[userId]);
   const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal profile-modal">
     <div className="modal-head"><div><p className="eyebrow">DHURUESI</p><h2>{profile?.display_name||"Përdorues i regjistruar"}</h2><small>{profile?.created_at?"Anëtar që nga "+new Date(profile.created_at).toLocaleDateString("sq-AL"):""}</small></div><button className="close" onClick={onClose}>×</button></div>
     <div className="profile-stats"><div><b>{posts.length}</b><small>shpallje aktive</small></div><div><b>{reviews.length}</b><small>vlerësime</small></div><div><b>{avg?avg.toFixed(1):"—"}</b><small>⭐ mesatare</small></div></div>
     {onChat&&<button className="secondary full" onClick={onChat}>💬 Mesazho</button>}
-    <div className="profile-posts"><h3>Shpalljet e këtij dhuruesi</h3>{posts.length?<div className="public-profile-posts">{posts.map(x=><button className="public-profile-post" key={x.id} onClick={()=>onListing?onListing(x):undefined}><span className="public-profile-post-image">{postImages[x.id]?<img src={postImages[x.id]} alt=""/>:<span>{emoji(x.category)}</span>}</span><span><b>{x.title}</b><small>{categoryLabel[x.category]||x.category} · {x.location_name||"Pranë teje"}</small><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"}</small></span></button>)}</div>:<div className="empty">Ky dhurues nuk ka shpallje aktive.</div>}</div>
+    <div className="profile-posts"><h3>Shpalljet e këtij dhuruesi</h3>{posts.length?<div className="public-profile-posts">{posts.map(x=><button className="public-profile-post" key={x.id} onClick={()=>onListing?.(x)}><span className="public-profile-post-image">{postImages[x.id]?<img src={postImages[x.id]} alt=""/>:<span>{emoji(x.category)}</span>}</span><span><b>{x.title}</b><small>{categoryLabel[x.category]||x.category} · {x.location_name||"Pranë teje"}</small><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"}</small></span></button>)}</div>:<div className="empty">Ky dhurues nuk ka shpallje aktive.</div>}</div>
     <div className="profile-reviews"><h3>Vlerësimet</h3>{reviews.length?reviews.map(r=><div className="review-row" key={r.id}><div><b>{r.reviewer?.display_name||"Përdorues"}</b><span>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</span></div><p>{r.comment||"Pa koment."}</p></div>):<div className="empty">Nuk ka ende vlerësime.</div>}</div>
   </div></div>;
 }
@@ -624,30 +611,15 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
   useEffect(()=>{load();},[]);
 
   async function action(c:Claim,status:string){
-    setBusy(true);
-    let error:any=null;
-    if(status==="accepted"){
-      const result=await supabase.rpc("dhuroje_accept_claim",{p_claim_id:c.id});
-      error=result.error;
-    }else{
-      const result=await supabase.from("dhuroje_claims").update({status}).eq("id",c.id);
-      error=result.error;
-      if(!error&&status==="collected"){
-        const result2=await supabase.from("dhuroje_listings").update({status:"collected"}).eq("id",c.listing_id).eq("owner_id",user.id);
-        error=result2.error;
-      }
-    }
-    if(!error){await load();onChanged();}else alert(error.message);
-    setBusy(false);
+    setBusy(true);let error:any=null;
+    if(status==="accepted"){const result=await supabase.rpc("dhuroje_accept_claim",{p_claim_id:c.id});error=result.error;}
+    else{const result=await supabase.from("dhuroje_claims").update({status}).eq("id",c.id);error=result.error;if(!error&&status==="collected"){const r=await supabase.from("dhuroje_listings").update({status:"collected"}).eq("id",c.listing_id).eq("owner_id",user.id);error=r.error;}}
+    if(!error){await load();onChanged();}else alert(error.message);setBusy(false);
   }
-
   async function withdrawRequest(c:Claim){
-    if(c.status!=="pending")return;
-    if(!window.confirm("Ta tërheqim këtë kërkesë?"))return;
-    setBusy(true);
-    const {error}=await supabase.from("dhuroje_claims").delete().eq("id",c.id).eq("claimant_id",user.id);
-    if(error)alert(error.message); else {await load();onChanged();}
-    setBusy(false);
+    if(c.status!=="pending")return;if(!window.confirm("Ta tërheqim këtë kërkesë?"))return;
+    setBusy(true);const {error}=await supabase.from("dhuroje_claims").delete().eq("id",c.id).eq("claimant_id",user.id);
+    if(error)alert(error.message);else{await load();onChanged();}setBusy(false);
   }
 
   const pickupFor=(claimId:string)=>pickups.find(p=>p.claim_id===claimId);
@@ -688,6 +660,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
           return <div className="dash-row" key={c.id}>
             <span className="dash-icon">{emoji(c.listing?.category||"other")}</span>
             <div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Në pritje":c.status==="accepted"?"Pranuar":c.status==="declined"?"Refuzuar":c.status}{p?.scheduled_at?" · Marrja: "+new Date(p.scheduled_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"}):""}</small></div>
+            {c.status==="pending"&&<button disabled={busy} className="danger" onClick={()=>withdrawRequest(c)}>↩ Tërhiq kërkesën</button>}
             {c.status==="pending"&&<button disabled={busy} className="danger" onClick={()=>withdrawRequest(c)}>↩ Tërhiq kërkesën</button>}
             {c.status==="accepted"&&p?.status==="proposed"&&<button disabled={busy} className="accept" onClick={()=>updatePickup(p,"confirmed")}>✓ Konfirmo marrjen</button>}
             {c.status==="accepted"&&!p&&<button disabled={busy} onClick={()=>onChat(c.listing,c.listing?.owner_id)}>💬 Kontakto</button>}{p?.status==="completed"&&<button disabled={busy} onClick={()=>setReviewFor({targetId:c.listing?.owner_id,listingId:c.listing_id,title:c.listing?.title||"Dhuratë"})}>⭐ Vlerëso</button>}
