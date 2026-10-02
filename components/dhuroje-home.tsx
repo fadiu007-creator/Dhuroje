@@ -398,10 +398,13 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
   async function load(){
     const [p,r,l]=await Promise.all([
       supabase.from("dhuroje_profiles").select("*").eq("id",user.id).maybeSingle(),
-      supabase.from("dhuroje_reviews").select("*,reviewer:dhuroje_profiles!dhuroje_reviews_reviewer_id_fkey(display_name)").eq("reviewed_id",user.id).order("created_at",{ascending:false}),
+      supabase.from("dhuroje_reviews").select("*").eq("reviewed_id",user.id).order("created_at",{ascending:false}),
       supabase.from("dhuroje_listings").select("status").eq("owner_id",user.id)
     ]);
-    setProfile(p.data);setName(p.data?.display_name||"");setReviews(r.data||[]);
+    const reviewerIds=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];
+    const {data:reviewerProfiles}=reviewerIds.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",reviewerIds):{data:[] as any[]};
+    const rp=Object.fromEntries((reviewerProfiles||[]).map((x:any)=>[x.id,x]));
+    setProfile(p.data);setName(p.data?.display_name||"");setReviews((r.data||[]).map((x:any)=>({...x,reviewer:rp[x.reviewer_id]})));
     setStats({active:(l.data||[]).filter((x:any)=>x.status==="available").length,given:(l.data||[]).filter((x:any)=>x.status==="collected").length});
   }
   useEffect(()=>{load();},[user]);
