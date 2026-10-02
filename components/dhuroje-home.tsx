@@ -598,9 +598,8 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
     const {error}=await supabase.from("dhuroje_claims").update({status}).eq("id",c.id);
     if(!error&&status==="accepted"){
       await supabase.from("dhuroje_listings").update({status:"reserved"}).eq("id",c.listing_id).eq("owner_id",user.id);
-    }
-    if(!error&&status==="declined"){
-      await supabase.from("dhuroje_claims").update({status:"declined"}).eq("id",c.id);
+      await supabase.from("dhuroje_claims").update({status:"declined"})
+        .eq("listing_id",c.listing_id).eq("status","pending").neq("id",c.id);
     }
     if(!error&&status==="collected"){
       await supabase.from("dhuroje_listings").update({status:"collected"}).eq("id",c.listing_id).eq("owner_id",user.id);
