@@ -601,7 +601,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
     setMine(ls||[]);
     const all=(cs||[]) as any[];
     setIncoming(all.filter((x:any)=>x.listing?.owner_id===user.id));
-    setWanted((myClaims||[]) as any[]);
+    setWanted((myClaims||[]).filter((x:any)=>x.status!=="cancelled") as any[]);
     const claimIds=[...all.filter((x:any)=>x.listing?.owner_id===user.id).map((x:any)=>x.id),...(myClaims||[]).map((x:any)=>x.id)];
     if(claimIds.length){
       const {data:ps}=await supabase.from("dhuroje_pickups").select("*").in("claim_id",[...new Set(claimIds)]).order("scheduled_at",{ascending:true});
@@ -619,9 +619,9 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
   async function withdrawRequest(c:Claim){
     if(c.status!=="pending")return;if(!window.confirm("Ta tërheqim këtë kërkesë?"))return;
     setBusy(true);
-    const {data:removed,error}=await supabase.from("dhuroje_claims").delete().eq("id",c.id).eq("claimant_id",user.id).select("id").maybeSingle();
+    const {data:removed,error}=await supabase.from("dhuroje_claims").update({status:"cancelled"}).eq("id",c.id).eq("claimant_id",user.id).eq("status","pending").select("id").maybeSingle();
     if(error)alert(error.message);
-    else if(!removed)alert("Kërkesa nuk u gjet ose nuk ke leje ta tërheqësh.");
+    else if(!removed)alert("Kërkesa nuk u gjet ose nuk mund të tërhiqet më.");
     else{await load();onChanged();}
     setBusy(false);
   }
