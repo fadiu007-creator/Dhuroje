@@ -254,3 +254,16 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 
 .poster-button{display:block;width:100%;border:0;background:transparent;padding:0;text-align:left;color:inherit;cursor:pointer}
 .poster-button strong{text-decoration:underline;text-decoration-color:#c8d0cd;text-underline-offset:3px}
+
+/* Public giver profile listings */
+.profile-posts{margin-top:18px}
+.profile-posts h3{margin:8px 0 10px}
+.public-profile-posts{display:grid;gap:7px;max-height:38vh;overflow:auto}
+.public-profile-post{display:grid;grid-template-columns:72px 1fr;gap:10px;width:100%;padding:7px;border:1px solid #e3e6e5;border-radius:8px;background:#fff;text-align:left;cursor:pointer}
+.public-profile-post:hover{background:#f6faf8;border-color:#c8d7d2}
+.public-profile-post-image{width:72px;height:72px;border-radius:6px;background:#f0f3f2;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:30px}
+.public-profile-post-image img{width:100%;height:100%;object-fit:cover}
+.public-profile-post>span:last-child{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.public-profile-post b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.public-profile-post small{font-size:10px;color:#707774}
+@media(max-width:560px){.public-profile-post{grid-template-columns:60px 1fr}.public-profile-post-image{width:60px;height:60px}}
