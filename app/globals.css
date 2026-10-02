@@ -217,3 +217,37 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
   .card h3{font-size:14px!important}
   .card p{font-size:11px!important}
 }
+
+/* Dhuroje marketplace trust + activity */
+.notification-button{position:relative;border:0;background:#f2f4f3;color:#4d5653;width:38px;height:38px;border-radius:50%;cursor:pointer}
+.notification-button span{position:absolute;right:-3px;top:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:10px;background:#d64545;color:#fff;font-size:9px;line-height:17px;font-weight:800}
+.modal-head-actions{display:flex;align-items:center;gap:8px}
+.text-button{border:0;background:transparent;color:var(--market-green,#007782);font-size:11px;font-weight:700;cursor:pointer}
+.notifications-modal,.profile-modal{max-width:560px!important}
+.notification-list{display:flex;flex-direction:column;gap:6px;max-height:62vh;overflow:auto}
+.notification{display:flex;gap:12px;text-align:left;border:1px solid #e3e6e5;background:#f3faf8;border-radius:9px;padding:12px;cursor:pointer}
+.notification.read{background:#fff}
+.notification-icon{font-size:20px;flex:0 0 28px}
+.notification b,.notification small{display:block}
+.notification small{color:#6f7774;margin-top:3px;font-size:11px}
+.profile-form{display:grid;gap:10px}
+.profile-form input{width:100%;box-sizing:border-box}
+.profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0}
+.profile-stats div{border:1px solid #e4e7e6;border-radius:9px;padding:13px;text-align:center;background:#fafbfa}
+.profile-stats b,.profile-stats small{display:block}
+.profile-stats b{font-size:21px}
+.profile-stats small{font-size:10px;color:#747b79;margin-top:3px}
+.profile-reviews h3{margin:8px 0}
+.review-row{border-top:1px solid #e6e8e7;padding:11px 0}
+.review-row div{display:flex;justify-content:space-between;gap:10px}
+.review-row span{letter-spacing:1px}
+.review-row p{margin:6px 0 2px;color:#555d5a;font-size:13px}
+.review-row small{color:#8a918e;font-size:10px}
+.rating-picker{display:flex;gap:7px;justify-content:center;margin:8px 0 18px}
+.rating-picker button{border:0;background:#f1f3f2;color:#b9bfbd;border-radius:8px;width:48px;height:48px;font-size:27px;cursor:pointer}
+.rating-picker button.selected{background:#e5f4f0;color:#e2a72e}
+@media(max-width:560px){
+ .modal-head-actions .text-button{font-size:9px}
+ .profile-stats b{font-size:18px}
+ .notification{padding:10px}
+}
