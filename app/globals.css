@@ -267,3 +267,5 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 .public-profile-post b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .public-profile-post small{font-size:10px;color:#707774}
 @media(max-width:560px){.public-profile-post{grid-template-columns:60px 1fr}.public-profile-post-image{width:60px;height:60px}}
+
+.poster-name-link{border:0;background:transparent;padding:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
