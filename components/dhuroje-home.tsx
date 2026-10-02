@@ -618,8 +618,12 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
   }
   async function withdrawRequest(c:Claim){
     if(c.status!=="pending")return;if(!window.confirm("Ta tërheqim këtë kërkesë?"))return;
-    setBusy(true);const {error}=await supabase.from("dhuroje_claims").delete().eq("id",c.id).eq("claimant_id",user.id);
-    if(error)alert(error.message);else{await load();onChanged();}setBusy(false);
+    setBusy(true);
+    const {data:removed,error}=await supabase.from("dhuroje_claims").delete().eq("id",c.id).eq("claimant_id",user.id).select("id").maybeSingle();
+    if(error)alert(error.message);
+    else if(!removed)alert("Kërkesa nuk u gjet ose nuk ke leje ta tërheqësh.");
+    else{await load();onChanged();}
+    setBusy(false);
   }
 
   const pickupFor=(claimId:string)=>pickups.find(p=>p.claim_id===claimId);
@@ -660,7 +664,6 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
           return <div className="dash-row" key={c.id}>
             <span className="dash-icon">{emoji(c.listing?.category||"other")}</span>
             <div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Në pritje":c.status==="accepted"?"Pranuar":c.status==="declined"?"Refuzuar":c.status}{p?.scheduled_at?" · Marrja: "+new Date(p.scheduled_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"}):""}</small></div>
-            {c.status==="pending"&&<button disabled={busy} className="danger" onClick={()=>withdrawRequest(c)}>↩ Tërhiq kërkesën</button>}
             {c.status==="pending"&&<button disabled={busy} className="danger" onClick={()=>withdrawRequest(c)}>↩ Tërhiq kërkesën</button>}
             {c.status==="accepted"&&p?.status==="proposed"&&<button disabled={busy} className="accept" onClick={()=>updatePickup(p,"confirmed")}>✓ Konfirmo marrjen</button>}
             {c.status==="accepted"&&!p&&<button disabled={busy} onClick={()=>onChat(c.listing,c.listing?.owner_id)}>💬 Kontakto</button>}{p?.status==="completed"&&<button disabled={busy} onClick={()=>setReviewFor({targetId:c.listing?.owner_id,listingId:c.listing_id,title:c.listing?.title||"Dhuratë"})}>⭐ Vlerëso</button>}
