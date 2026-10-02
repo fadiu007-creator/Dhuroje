@@ -287,7 +287,7 @@ export default function DhurojeHome(){
     {editingListing&&<EditListingModal listing={editingListing} onClose={()=>setEditingListing(null)} onSaved={async()=>{setEditingListing(null);await load();}}/>}
     {postChoice&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setPostChoice(false)}><div className="modal auth-choice"><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Si dëshiron të vazhdosh?</h2></div><button type="button" className="close" onClick={()=>setPostChoice(false)}>×</button></div><p className="form-help">Për të dhuruar një gjë, zgjidh nëse ke llogari apo po poston për herë të parë.</p><button className="primary full" onClick={()=>choosePostAuth("login")}>Kam llogari · Hyr</button><button className="secondary full" onClick={()=>choosePostAuth("signup")}>Jam i ri · Krijo llogari</button></div></div>}
     {showAuth&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowAuth(false)}><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">{postAuth?"DHUROJE":"DHUROJE"}</p><h2>{postAuth?(authMode==="login"?"Hyr për të dhuruar":"Krijo llogari për të dhuruar"):(pendingPost?"Krijo llogari":"Krijo llogari")}</h2></div><button type="button" className="close" onClick={()=>{setShowAuth(false);setPostAuth(false);setPendingPost(null)}}>×</button></div>{postAuth&&<p className="form-help">{authMode==="login"?"Hyr me llogarinë tënde dhe pastaj plotëso postimin.":"Krijo llogarinë tënde një herë dhe pastaj plotëso postimin."}</p>}{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Krijo llogari"}</button>{!pendingPost&&!postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}{postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Jam i ri · Krijo llogari":"Kam llogari · Hyr"}</button>}</form></div>}
-    {showMessages&&<Messages user={user} onClose={()=>setShowMessages(false)}/>}
+    {showMessages&&<Messages user={user} onClose={()=>setShowMessages(false)}/>} {showNotifications&&<Notifications user={user} onClose={()=>setShowNotifications(false)} onChanged={loadNotificationCount}/>} {showProfile&&<ProfileModal user={user} onClose={()=>setShowProfile(false)} onChanged={loadNotificationCount}/>}
     {showDashboard&&<Dashboard user={user} onClose={()=>setShowDashboard(false)} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven}/>} 
     <nav className="bottom-nav"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false)}}>⌂<span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(x=>!x);setMapMode(false);}}}>♡<span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add">＋</button><button onClick={()=>requireAuth()&&setShowMessages(true)}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
   </main>;
@@ -569,7 +569,7 @@ function Messages({user,onClose}:{user:any;onClose:()=>void}){
 function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void}){
   const [tab,setTab]=useState<"my"|"requests"|"wanted">("my");
   const [mine,setMine]=useState<Listing[]>([]),[incoming,setIncoming]=useState<Claim[]>([]),[wanted,setWanted]=useState<Claim[]>([]);
-  const [pickups,setPickups]=useState<any[]>([]),[busy,setBusy]=useState(false),[scheduleFor,setScheduleFor]=useState<Claim|null>(null);
+  const [pickups,setPickups]=useState<any[]>([]),[busy,setBusy]=useState(false),[scheduleFor,setScheduleFor]=useState<Claim|null>(null),[reviewFor,setReviewFor]=useState<any>(null);
 
   async function load(){
     if(!user)return;
@@ -674,7 +674,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
             <div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Kërkesë e re":c.status} · Nga {c.claimant?.display_name||"përdorues i regjistruar"}{p?.scheduled_at?" · Marrja: "+new Date(p.scheduled_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"}):""}</small></div>
             {c.claimant_id&&<button disabled={busy} onClick={()=>c.listing&&onChat(c.listing,c.claimant_id)}>💬 Mesazho</button>}
             {c.status==="pending"&&<><button disabled={busy} className="accept" onClick={()=>action(c,"accepted")}>Prano</button><button disabled={busy} onClick={()=>action(c,"declined")}>Refuzo</button></>}
-            {c.status==="accepted"&&<><button disabled={busy} onClick={()=>setScheduleFor(c)}>📅 Cakto marrjen</button>{p?.status==="confirmed"&&<button disabled={busy} onClick={()=>updatePickup(p,"completed")}>✓ U mor</button>}</>}
+            {c.status==="accepted"&&<><button disabled={busy} onClick={()=>setScheduleFor(c)}>📅 Cakto marrjen</button>{p?.status==="confirmed"&&<button disabled={busy} onClick={()=>updatePickup(p,"completed")}>✓ U mor</button>}{p?.status==="completed"&&<button disabled={busy} onClick={()=>setReviewFor({targetId:c.claimant_id,listingId:c.listing_id,title:c.listing?.title||"Dhuratë"})}>⭐ Vlerëso</button>}</>}
           </div>
         }):<div className="empty">Nuk ke kërkesa ende.</div>}
       </div>}
@@ -686,11 +686,12 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
             <span className="dash-icon">{emoji(c.listing?.category||"other")}</span>
             <div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Në pritje":c.status==="accepted"?"Pranuar":c.status==="declined"?"Refuzuar":c.status}{p?.scheduled_at?" · Marrja: "+new Date(p.scheduled_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"}):""}</small></div>
             {c.status==="accepted"&&p?.status==="proposed"&&<button disabled={busy} className="accept" onClick={()=>updatePickup(p,"confirmed")}>✓ Konfirmo marrjen</button>}
-            {c.status==="accepted"&&!p&&<button disabled={busy} onClick={()=>onChat(c.listing,c.listing?.owner_id)}>💬 Kontakto</button>}
+            {c.status==="accepted"&&!p&&<button disabled={busy} onClick={()=>onChat(c.listing,c.listing?.owner_id)}>💬 Kontakto</button>}{p?.status==="completed"&&<button disabled={busy} onClick={()=>setReviewFor({targetId:c.listing?.owner_id,listingId:c.listing_id,title:c.listing?.title||"Dhuratë"})}>⭐ Vlerëso</button>}
           </div>
         }):<div className="empty">Nuk ke kërkuar ende ndonjë dhuratë.</div>}
       </div>}
 
+      {reviewFor&&<ReviewModal user={user} targetId={reviewFor.targetId} listingId={reviewFor.listingId} listingTitle={reviewFor.title} onClose={()=>setReviewFor(null)} onSaved={async()=>{setReviewFor(null);await load();onChanged();}}/>}
       {scheduleFor&&<div className="pickup-inline">
         <div className="modal-head"><div><p className="eyebrow">TAKIMI</p><h3>Cakto marrjen</h3></div><button className="close" onClick={()=>setScheduleFor(null)}>×</button></div>
         <form id="pickup-form" onSubmit={e=>{e.preventDefault();schedulePickup(scheduleFor)}}>
