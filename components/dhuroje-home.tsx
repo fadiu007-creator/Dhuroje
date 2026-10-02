@@ -235,6 +235,16 @@ export default function DhurojeHome(){
     navigator.geolocation.getCurrentPosition(p=>{setCoords({lat:p.coords.latitude,lon:p.coords.longitude});setLocation("Lokacioni im");},()=>setError("Lokacioni nuk u lejua."));
   }
 
+  function toggleMap(){
+    if(mapMode){setMapMode(false);return;}
+    if(coords){setMapMode(true);return;}
+    if(!navigator.geolocation){setError("Ky shfletues nuk mbështet lokacionin.");return;}
+    navigator.geolocation.getCurrentPosition(
+      p=>{setCoords({lat:p.coords.latitude,lon:p.coords.longitude});setLocation("Lokacioni im");setMapMode(true);},
+      ()=>setError("Lokacioni nuk u lejua.")
+    );
+  }
+
   return <main>
     <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="top-actions">
       <button className="header-link" onClick={()=>openPosting()}>Dhuro</button><button className="profile-button" onClick={()=>setShowMenu(!showMenu)}>●</button>
@@ -244,7 +254,7 @@ export default function DhurojeHome(){
     <section className="hero"><div><p className="eyebrow">♻️ DHURATA PRANË TEJE</p><h1>Gjej diçka.<br/><span>Dhuro diçka.</span></h1><p className="hero-copy">Gjërat që nuk të duhen më mund t'i bëjnë dikujt tjetër shumë punë.</p></div><div className="hero-actions"><button className="primary" onClick={()=>openPosting()}>＋ Dhuro</button>{user&&<button className="secondary" onClick={()=>setShowDashboard(true)}>Profili im</button>}</div></section>
     <section className="search-wrap"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Çfarë po kërkon? p.sh. karrige, rroba..."/></section>
     <section className="categories">{categories.map(x=><button key={x} className={category===x?"chip active":"chip"} onClick={()=>setCategory(x)}>{x}</button>)}</section>
-    <section className="location-row"><div><span className="pin">⌖</span><div><strong>{location}</strong><small>{nearbyOnly?"Brenda 25 km":"Shih çfarë po dhurohet pranë teje"}</small></div></div><div className="location-actions"><button className="filter-button" onClick={locate}>📍 Përdor lokacionin</button><button className="map-toggle" onClick={()=>setMapMode(x=>!x)}>🗺️ {mapMode?"Lista":"Harta"}</button></div></section>
+    <section className="location-row"><div><span className="pin">⌖</span><div><strong>{location}</strong><small>{nearbyOnly?"Brenda 25 km":"Shih çfarë po dhurohet pranë teje"}</small></div></div><div className="location-actions"><button className="filter-button" onClick={locate}>📍 Përdor lokacionin</button><button className="map-toggle" onClick={toggleMap}>🗺️ {mapMode?"Lista":"Harta"}</button></div></section>
     {coords&&<div className="filter-panel"><button onClick={()=>setNearbyOnly(x=>!x)}>{nearbyOnly?"✓ Brenda 25 km":"Pranë meje · 25 km"}</button><span className="nearby-hint">Renditur sipas distancës</span></div>}
     {mapMode&&coords&&<section className="map-panel"><iframe title="Harta e Dhuroje" src={"https://www.openstreetmap.org/export/embed.html?bbox="+(coords.lon-.12)+"%2C"+(coords.lat-.08)+"%2C"+(coords.lon+.12)+"%2C"+(coords.lat+.08)+"&layer=mapnik&marker="+coords.lat+"%2C"+coords.lon}/><div className="map-list">{filtered.slice(0,8).map(x=><button key={x.id} onClick={()=>setActiveListing(x)}>{emoji(x.category)} <span><b>{x.title}</b><small>{x.location_name||"Pranë teje"}{distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)!=null?" · "+distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)!.toFixed(1)+" km":""}</small></span></button>)}</div></section>}
 
