@@ -251,3 +251,6 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
  .profile-stats b{font-size:18px}
  .notification{padding:10px}
 }
+
+.poster-button{display:block;width:100%;border:0;background:transparent;padding:0;text-align:left;color:inherit;cursor:pointer}
+.poster-button strong{text-decoration:underline;text-decoration-color:#c8d0cd;text-underline-offset:3px}
