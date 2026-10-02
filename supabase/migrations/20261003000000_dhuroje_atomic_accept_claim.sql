@@ -1,7 +1,7 @@
 create or replace function public.dhuroje_accept_claim(p_claim_id uuid)
 returns boolean
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
