@@ -33,7 +33,7 @@ export default function DhurojeHome(){
   const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
   const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
   const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
-  const [showDashboard,setShowDashboard]=useState(false),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
+  const [showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
 
@@ -107,7 +107,15 @@ export default function DhurojeHome(){
     if(postAuth){setPostAuth(false);setPostChoice(false);setShowGive(true);}
     await load();
   }
-  async function signOut(){await supabase.auth.signOut();setShowMenu(false);await load();}
+  async function signOut(){await supabase.auth.signOut();setShowMenu(false);setShowProfile(false);setShowNotifications(false);await load();}
+  async function loadNotificationCount(){
+    if(!user){setNotificationCount(0);return;}
+    const {count}=await supabase.from("dhuroje_notifications").select("id",{count:"exact",head:true}).eq("recipient_id",user.id).is("read_at",null);
+    setNotificationCount(count||0);
+  }
+  useEffect(()=>{loadNotificationCount();},[user]);
+  async function openNotifications(){if(!user){setShowAuth(true);return;}setShowNotifications(true);}
+  async function openProfile(){if(!user){setShowAuth(true);return;}setShowProfile(true);}
   async function toggleFavorite(id:string){
     if(!requireAuth())return;
     if(favorites.includes(id)){await supabase.from("dhuroje_favorites").delete().eq("user_id",user.id).eq("listing_id",id);setFavorites(x=>x.filter(v=>v!==id));}
@@ -247,7 +255,7 @@ export default function DhurojeHome(){
 
   return <main>
     <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="header-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko"/></div><nav className="top-nav"><button className="top-nav-active" onClick={()=>{setFavoritesOnly(false);setMapMode(false)}}>Eksploro</button><button onClick={()=>user?setFavoritesOnly(true):setShowAuth(true)}>Të ruajturat</button></nav><div className="top-actions">
-      <button className="header-link" onClick={()=>openPosting()}>＋ Dhuro</button><button className="profile-button" aria-label="Profili" onClick={()=>setShowMenu(!showMenu)}>●</button>
+      <button className="header-link" onClick={()=>openPosting()}>＋ Dhuro</button>{user&&<button className="notification-button" aria-label="Njoftimet" onClick={openNotifications}>🔔{notificationCount>0&&<span>{notificationCount>99?"99+":notificationCount}</span>}</button>}<button className="profile-button" aria-label="Profili" onClick={()=>user?openProfile():setShowMenu(!showMenu)}>●</button>
       {showMenu&&<div className="profile-menu">{user?<><strong>{profile?.display_name||user.email}</strong><button onClick={()=>setShowMessages(true)}>💬 Mesazhet</button><button onClick={()=>requireAuth()&&setShowDashboard(true)}>📦 Paneli im</button><button onClick={signOut}>Dil</button></>:<button onClick={()=>setShowAuth(true)}>Hyr / Regjistrohu</button>}</div>}
     </div></header>
 
@@ -361,6 +369,58 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={e=>setNewFiles(Array.from(e.target.files||[]).slice(0,6))}/></label></div>
     <button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj ndryshimet"}</button>
   </form></div>;
+}
+
+function Notifications({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
+  const [rows,setRows]=useState<any[]>([]),[loading,setLoading]=useState(true);
+  async function load(){
+    setLoading(true);
+    const {data}=await supabase.from("dhuroje_notifications").select("*").eq("recipient_id",user.id).order("created_at",{ascending:false}).limit(50);
+    setRows(data||[]);setLoading(false);
+  }
+  useEffect(()=>{load();},[user]);
+  async function markRead(id?:string){
+    const q=supabase.from("dhuroje_notifications").update({read_at:new Date().toISOString()}).eq("recipient_id",user.id).is("read_at",null);
+    if(id) await supabase.from("dhuroje_notifications").update({read_at:new Date().toISOString()}).eq("id",id).eq("recipient_id",user.id);
+    else await q;
+    await load();onChanged();
+  }
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal notifications-modal">
+      <div className="modal-head"><div><p className="eyebrow">AKTIVITETI</p><h2>Njoftimet</h2></div><div className="modal-head-actions"><button className="text-button" onClick={()=>markRead()}>Shëno të gjitha si të lexuara</button><button className="close" onClick={onClose}>×</button></div></div>
+      {loading?<div className="empty">Po ngarkohen…</div>:!rows.length?<div className="empty">Nuk ke njoftime ende.</div>:<div className="notification-list">{rows.map(n=><button key={n.id} className={n.read_at?"notification read":"notification"} onClick={()=>markRead(n.id)}><span className="notification-icon">{n.type==="message"?"💬":n.type==="claim"?"🙋":n.type==="pickup"?"📅":n.type==="completed"?"🎉":n.type==="review"?"⭐":"🔔"}</span><span><b>{n.title}</b><small>{n.body}</small><small>{new Date(n.created_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"})}</small></span></button>)}</div>}
+    </div>
+  </div>;
+}
+
+function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
+  const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[stats,setStats]=useState({active:0,given:0}),[name,setName]=useState(""),[saving,setSaving]=useState(false);
+  async function load(){
+    const [p,r,l]=await Promise.all([
+      supabase.from("dhuroje_profiles").select("*").eq("id",user.id).maybeSingle(),
+      supabase.from("dhuroje_reviews").select("*,reviewer:dhuroje_profiles!dhuroje_reviews_reviewer_id_fkey(display_name)").eq("reviewed_id",user.id).order("created_at",{ascending:false}),
+      supabase.from("dhuroje_listings").select("status").eq("owner_id",user.id)
+    ]);
+    setProfile(p.data);setName(p.data?.display_name||"");setReviews(r.data||[]);
+    setStats({active:(l.data||[]).filter((x:any)=>x.status==="available").length,given:(l.data||[]).filter((x:any)=>x.status==="collected").length});
+  }
+  useEffect(()=>{load();},[user]);
+  async function save(e:FormEvent<HTMLFormElement>){e.preventDefault();setSaving(true);const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues"});if(error)alert(error.message);else{await load();onChanged();}setSaving(false);}
+  const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal profile-modal">
+      <div className="modal-head"><div><p className="eyebrow">PROFILI IM</p><h2>{profile?.display_name||"Përdorues"}</h2><small>Anëtar që nga {profile?.created_at?new Date(profile.created_at).toLocaleDateString("sq-AL"):new Date(user.created_at).toLocaleDateString("sq-AL")}</small></div><button className="close" onClick={onClose}>×</button></div>
+      <form className="profile-form" onSubmit={save}><label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label><button className="secondary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj profilin"}</button></form>
+      <div className="profile-stats"><div><b>{stats.active}</b><small>aktive</small></div><div><b>{stats.given}</b><small>të dhuruara</small></div><div><b>{avg?avg.toFixed(1):"—"}</b><small>⭐ {reviews.length} vlerësime</small></div></div>
+      <div className="profile-reviews"><h3>Vlerësimet</h3>{reviews.length?reviews.map(r=><div className="review-row" key={r.id}><div><b>{r.reviewer?.display_name||"Përdorues"}</b><span>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</span></div><p>{r.comment||"Pa koment."}</p><small>{new Date(r.created_at).toLocaleDateString("sq-AL")}</small></div>):<div className="empty">Nuk ke marrë ende vlerësime. Pas një marrjeje të përfunduar, mund të vlerësoheni nga njëri-tjetri.</div>}</div>
+    </div>
+  </div>;
+}
+
+function ReviewModal({user,targetId,listingId,listingTitle,onClose,onSaved}:{user:any;targetId:string;listingId:string;listingTitle:string;onClose:()=>void;onSaved:()=>void}){
+  const [rating,setRating]=useState(5),[comment,setComment]=useState(""),[saving,setSaving]=useState(false);
+  async function save(e:FormEvent<HTMLFormElement>){e.preventDefault();setSaving(true);const {error}=await supabase.from("dhuroje_reviews").insert({reviewer_id:user.id,reviewed_id:targetId,listing_id:listingId,rating,comment:comment.trim()||null});if(error)alert(error.code==="23505"?"E ke vlerësuar tashmë këtë dhurojë.":error.message);else{onSaved();onClose();}setSaving(false);}
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal review-modal" onSubmit={save}><div className="modal-head"><div><p className="eyebrow">PAS MARRJES</p><h2>Vlerëso dhurojën</h2><small>{listingTitle}</small></div><button type="button" className="close" onClick={onClose}>×</button></div><div className="rating-picker">{[1,2,3,4,5].map(n=><button type="button" key={n} className={n<=rating?"selected":""} onClick={()=>setRating(n)}>★</button>)}</div><label>Komenti<textarea value={comment} onChange={e=>setComment(e.target.value)} maxLength={500} placeholder="Si ishte përvoja?"/></label><button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Publiko vlerësimin"}</button></form></div>;
 }
 
 function Messages({user,onClose}:{user:any;onClose:()=>void}){
