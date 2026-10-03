@@ -297,10 +297,8 @@ export default function DhurojeHome(){
     if(!currentUser)return;
     let otherUserId=targetUserId;
     if(listing.owner_id!==currentUser.id){
-      const {data:claimRow,error:claimError}=await supabase.from("dhuroje_claims").select("id,status").eq("listing_id",listing.id).eq("claimant_id",currentUser.id).maybeSingle();
-      if(claimError){setError(claimError.message);return;}
-      if(!claimRow){setError("Së pari dërgo një kërkesë për këtë dhuratë. Kështu dhuruesi e di kush po e kërkon.");return;}
-      if(["declined","cancelled","no_show"].includes(claimRow.status)){setError("Kjo kërkesë nuk është më aktive.");return;}
+      // Messaging is intentionally available before a request is made.
+      // The listing owner is the conversation partner; requesting is a separate action.
       otherUserId=listing.owner_id;
     } else if(!otherUserId){
       setError("Për të kontaktuar një kërkues, hape kërkesën te Paneli im dhe zgjidh Mesazho.");
@@ -575,92 +573,56 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
   const [selectedConversation,setSelectedConversation]=useState<string>(initialConversationId||"");
   const [body,setBody]=useState("");
   const [loading,setLoading]=useState(true),[sending,setSending]=useState(false),[error,setError]=useState("");
+  const [mobileChat,setMobileChat]=useState(false);
 
   async function load(){
     if(!user)return;
     setLoading(true);setError("");
-    const {data:members,error:memberError}=await supabase
-      .from("dhuroje_conversation_members")
-      .select("conversation_id")
-      .eq("user_id",user.id);
+    const {data:members,error:memberError}=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",user.id);
     if(memberError){setError("Nuk mund të ngarkoheshin bisedat. Provo përsëri.");setLoading(false);return;}
-
     const ids=(members||[]).map((x:any)=>x.conversation_id);
-    if(!ids.length){
-      setConversations([]);
-      setMessages([]);
-      setSelectedConversation("");
-      setLoading(false);
-      return;
-    }
+    if(!ids.length){setConversations([]);setMessages([]);setSelectedConversation("");setLoading(false);return;}
 
-    const {data:cs}=await supabase
-      .from("dhuroje_conversations")
-      .select("id,listing_id,created_at")
-      .in("id",ids)
-      .order("created_at",{ascending:false});
+    const {data:cs}=await supabase.from("dhuroje_conversations").select("id,listing_id,created_at").in("id",ids);
     const rows=cs||[];
-
     const listingIds=rows.map((x:any)=>x.listing_id).filter(Boolean);
-    const {data:listingsData}=listingIds.length
-      ?await supabase.from("dhuroje_listings").select("id,title,owner_id").in("id",listingIds)
-      :{data:[] as any[]};
-
-    const {data:allMembers}=await supabase
-      .from("dhuroje_conversation_members")
-      .select("conversation_id,user_id")
-      .in("conversation_id",ids);
-
-    const otherIds=(allMembers||[])
-      .filter((m:any)=>m.user_id!==user.id)
-      .map((m:any)=>m.user_id);
-    const {data:profiles}=otherIds.length
-      ?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",[...new Set(otherIds)])
-      :{data:[] as any[]};
-
-    const {data:ms}=await supabase
-      .from("dhuroje_messages")
-      .select("*")
-      .in("conversation_id",ids)
-      .order("created_at",{ascending:true});
+    const {data:listingsData}=listingIds.length?await supabase.from("dhuroje_listings").select("id,title,owner_id,location_name,status").in("id",listingIds):{data:[] as any[]};
+    const {data:allMembers}=await supabase.from("dhuroje_conversation_members").select("conversation_id,user_id").in("conversation_id",ids);
+    const otherIds=[...new Set((allMembers||[]).filter((m:any)=>m.user_id!==user.id).map((m:any)=>m.user_id))];
+    const {data:profiles}=otherIds.length?await supabase.from("dhuroje_profiles").select("id,display_name,avatar_url").in("id",otherIds):{data:[] as any[]};
+    const {data:ms}=await supabase.from("dhuroje_messages").select("*").in("conversation_id",ids).order("created_at",{ascending:true});
 
     const listingMap=Object.fromEntries((listingsData||[]).map((x:any)=>[x.id,x]));
     const profileMap=Object.fromEntries((profiles||[]).map((x:any)=>[x.id,x]));
     const otherByConversation:Record<string,string>={};
-    (allMembers||[]).forEach((m:any)=>{
-      if(m.user_id!==user.id)otherByConversation[m.conversation_id]=m.user_id;
-    });
-
+    (allMembers||[]).forEach((m:any)=>{if(m.user_id!==user.id)otherByConversation[m.conversation_id]=m.user_id;});
     const lastMessageByConversation:Record<string,any>={};
     (ms||[]).forEach((m:any)=>{lastMessageByConversation[m.conversation_id]=m;});
 
-    // Only show people where an actual message exists. Each row is a person, not a dropdown.
-    const enriched=rows
-      .filter((c:any)=>lastMessageByConversation[c.id])
-      .map((c:any)=>({
-        ...c,
-        listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
-        otherUserId:otherByConversation[c.id],
-        otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues",
-        lastMessage:lastMessageByConversation[c.id]
-      }))
-      .sort((a:any,b:any)=>new Date(b.lastMessage.created_at).getTime()-new Date(a.lastMessage.created_at).getTime());
+    const enriched=rows.filter((c:any)=>lastMessageByConversation[c.id]).map((c:any)=>({
+      ...c,
+      listing:listingMap[c.listing_id],
+      listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
+      otherUserId:otherByConversation[c.id],
+      otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues",
+      avatar:profileMap[otherByConversation[c.id]]?.avatar_url||null,
+      lastMessage:lastMessageByConversation[c.id]
+    })).sort((a:any,b:any)=>new Date(b.lastMessage.created_at).getTime()-new Date(a.lastMessage.created_at).getTime());
 
-    setConversations(enriched);
-    setMessages(ms||[]);
+    setConversations(enriched);setMessages(ms||[]);
     setSelectedConversation(current=>{
       if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))return initialConversationId;
       if(current&&enriched.some(c=>c.id===current))return current;
       return enriched[0]?.id||"";
     });
+    if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))setMobileChat(true);
     setLoading(false);
   }
 
   useEffect(()=>{load();},[user,initialConversationId]);
-
   useEffect(()=>{
     if(!user)return;
-    const ch=supabase.channel("all-user-messages-"+user.id)
+    const ch=supabase.channel("messages-ui-"+user.id)
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"dhuroje_messages"},()=>load())
       .subscribe();
     return()=>{supabase.removeChannel(ch);};
@@ -674,72 +636,67 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
     if(!selectedConversation||!text||sending)return;
     if(text.length>2000){setError("Mesazhi mund të ketë maksimum 2000 karaktere.");return;}
     setSending(true);setError("");
-    const {error:e}=await supabase.from("dhuroje_messages").insert({
-      conversation_id:selectedConversation,
-      sender_id:user.id,
-      body:text
-    });
+    const {error:e}=await supabase.from("dhuroje_messages").insert({conversation_id:selectedConversation,sender_id:user.id,body:text});
     if(e)setError("Mesazhi nuk u dërgua. Provo përsëri.");
     else{setBody("");await load();}
     setSending(false);
   }
-  function formatMessageDate(value:string){
-    const d=new Date(value),now=new Date();
-    const sameDay=d.toDateString()===now.toDateString();
-    return sameDay?d.toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("sq-AL",{day:"2-digit",month:"2-digit"});
-  }
+
+  function time(v:string){return new Date(v).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"});}
+  function day(v:string){return new Date(v).toLocaleDateString("sq-AL",{day:"2-digit",month:"long",year:"numeric"});}
+  function initials(name:string){return (name||"P").trim().split(/\\s+/).slice(0,2).map((x:string)=>x[0]).join("").toUpperCase();}
+  function selectConversation(id:string){setSelectedConversation(id);setMobileChat(true);setError("");}
 
   return <div className="page-content messages-page">
-    <div className="account-page-top">
-      <div>
-        <p className="eyebrow">MESAZHET</p>
-        <h1>Mesazhet</h1>
-        <p className="account-email">Personat dhe dhuratat për të cilat keni folur</p>
-      </div>
+    <div className="messages-topbar">
+      <div><p className="eyebrow">INBOX</p><h1>Mesazhet</h1><p className="messages-subtitle">Bisedat me komunitetin dhe dhuratat që po ndjek.</p></div>
       <button className="close account-close" onClick={onClose} aria-label="Mbyll">×</button>
     </div>
 
     {error&&<div className="message-error" role="alert">{error}</div>}
-    {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
+    {loading?<div className="messages-loading"><span></span>Po ngarkohen bisedat…</div>:!conversations.length?
       <div className="messages-empty">
-        <div className="messages-empty-icon">💬</div>
-        <h3>Nuk ke ende biseda</h3>
-        <p>Kur të kontaktosh dikë për një dhuratë, bisedat e tua do të shfaqen këtu.</p>
+        <div className="messages-empty-icon">💬</div><h3>Inbox-i yt është bosh</h3>
+        <p>Hap një dhuratë dhe zgjidh <b>Mesazho dhuruesin</b>. Mund të shkruash edhe para se të dërgosh kërkesë.</p>
       </div>:
-      <div className="messages-layout compact-messages">
-        <div className="conversation-list">
-          <div className="conversation-list-head"><h3>Bisedat</h3><span>{conversations.length}</span></div>
-          {conversations.map(c=>{
-            const active=c.id===selectedConversation;
-            return <button key={c.id} className={"conversation-user"+(active?" active":"")} onClick={()=>setSelectedConversation(c.id)}>
-              <span className="conversation-avatar">{(c.otherName||"P").slice(0,1).toUpperCase()}</span>
-              <span className="conversation-user-text">
-                <b>{c.otherName}</b>
-                <small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Mesazh"}</small>
-              </span>
-              <span className="conversation-time">{c.lastMessage?.created_at?formatMessageDate(c.lastMessage.created_at):""}</span>
-            </button>;
-          })}
-        </div>
+      <div className={"messages-workspace"+(mobileChat?" mobile-chat-open":"")}>
+        <aside className="conversation-list">
+          <div className="conversation-list-head"><div><b>Bisedat</b><small>{conversations.length} {conversations.length===1?"bisedë":"biseda"}</small></div></div>
+          <div className="conversation-items">
+            {conversations.map(c=><button key={c.id} className={"conversation-user"+(c.id===selectedConversation?" active":"")} onClick={()=>selectConversation(c.id)}>
+              <span className="conversation-avatar">{c.avatar?<img src={c.avatar} alt=""/>:initials(c.otherName)}</span>
+              <span className="conversation-user-text"><b>{c.otherName}</b><small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Bisedë e re"}</small></span>
+              <span className="conversation-time">{time(c.lastMessage.created_at)}</span>
+            </button>)}
+          </div>
+        </aside>
 
-        {selected&&<div className="chat-panel">
-          <div className="message-person"><div className="message-context"><span className="message-context-label">DHURATË</span><span>{selected.listingTitle}</span></div>
-            <span className="conversation-avatar">{(selected.otherName||"P").slice(0,1).toUpperCase()}</span>
-            <div><b>{selected.otherName}</b><small>{selected.listingTitle}</small></div>
+        {selected?<section className="chat-panel">
+          <header className="professional-chat-header">
+            <button className="chat-back" onClick={()=>setMobileChat(false)} aria-label="Kthehu">‹</button>
+            <div className="chat-person-avatar">{selected.avatar?<img src={selected.avatar} alt=""/>:initials(selected.otherName)}</div>
+            <div className="chat-person-info"><b>{selected.otherName}</b><span>Po flisni për <strong>{selected.listingTitle}</strong></span></div>
+            <button className="chat-listing-link" onClick={()=>{const l=listings.find(x=>x.id===selected.listing_id);if(l){setActiveListing(l);navigatePage("listing",l.id);}}}>Shiko dhuratën</button>
+          </header>
+
+          <div className="chat-listing-strip">
+            <span className="chat-listing-icon">{emoji(selected.listing?.category||"other")}</span>
+            <div><b>{selected.listingTitle}</b><small>{selected.listing?.location_name||"Lokacion i panjohur"} · {selected.listing?.status==="reserved"?"E rezervuar":"E disponueshme"}</small></div>
           </div>
 
           <div className="chat-messages">
-            {selectedMessages.length?selectedMessages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>
-              {m.body}
-              <small>{formatMessageDate(m.created_at)}</small>
-            </div>):<div className="empty">Nuk ka ende mesazhe.</div>}
+            {selectedMessages.length?selectedMessages.map((m,i)=>{
+              const previous=selectedMessages[i-1];
+              const newDay=!previous||new Date(previous.created_at).toDateString()!==new Date(m.created_at).toDateString();
+              return <div key={m.id}>{newDay&&<div className="chat-day"><span>{day(m.created_at)}</span></div>}<div className={m.sender_id===user.id?"message-row mine":"message-row"}><div className="bubble"><p>{m.body}</p><small>{time(m.created_at)}</small></div></div></div>;
+            }):<div className="chat-first-message"><b>Bisedë e re</b><span>Thuaji përshëndetje dhe pyet për dhuratën.</span></div>}
           </div>
 
-          <div className="composer">
-            <textarea value={body} maxLength={2000} rows={1} onChange={e=>setBody(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder={"Shkruaj një mesazh për "+selected.otherName+"…"} />
-            <div className="composer-actions"><small>{body.length}/2000 · Enter për dërgim</small><button className="primary" disabled={sending||!body.trim()} onClick={send}>{sending?"Dërgohet…":"Dërgo"}</button></div>
+          <div className="professional-composer">
+            <textarea value={body} maxLength={2000} rows={1} onChange={e=>setBody(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder={"Shkruaj "+selected.otherName+"…"} />
+            <div><small>{body.length}/2000 · Enter për dërgim</small><button className="primary" disabled={sending||!body.trim()} onClick={send}>{sending?"Po dërgohet…":"Dërgo"}</button></div>
           </div>
-        </div>}
+        </section>:<div className="chat-no-selection"><span>💬</span><b>Zgjidh një bisedë</b><small>Mesazhet e tua do të shfaqen këtu.</small></div>}
       </div>
     }
   </div>;
