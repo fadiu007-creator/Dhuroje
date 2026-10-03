@@ -271,3 +271,8 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 .poster-name-link{border:0;background:transparent;padding:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 
 .message-person{display:flex;align-items:center;gap:10px;border:1px solid #e3e6e5;background:#f4f8f6;border-radius:10px;padding:10px 12px;margin-bottom:10px}.message-person span{font-size:22px}.message-person b,.message-person small{display:block}.message-person small{color:#737b78;font-size:10px;margin-top:2px}
+
+.route-shell{position:fixed;inset:0;z-index:80;background:#fff;overflow:auto}
+.route-shell>.modal-backdrop{position:static!important;inset:auto!important;min-height:100vh;background:#fff!important;display:block!important;padding:0!important}
+.route-shell>.modal-backdrop>.modal{width:100%!important;max-width:920px!important;min-height:100vh!important;max-height:none!important;box-sizing:border-box;border-radius:0!important;box-shadow:none!important;margin:0 auto!important;overflow:visible!important}
+.route-shell .close{position:sticky;top:0}
