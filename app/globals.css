@@ -368,3 +368,26 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
  .account-sections{grid-template-columns:1fr}
  .account-section-head{flex-direction:column}.personal-details div{padding:13px}
 }
+
+
+.messages-page{max-width:1000px!important}
+.messages-layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;margin-top:22px;min-height:520px}
+.conversation-list{border:1px solid var(--line);border-radius:16px;background:#fff;padding:10px;overflow:auto}
+.conversation-list h3{font-size:14px;margin:6px 8px 10px;color:#39443f}
+.conversation-user{width:100%;display:flex;align-items:center;gap:10px;border:0;border-bottom:1px solid var(--line);background:#fff;padding:12px 8px;text-align:left;cursor:pointer;border-radius:10px}
+.conversation-user:last-child{border-bottom:0}
+.conversation-user:hover,.conversation-user.active{background:var(--green2)}
+.conversation-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;background:#edf3ef;color:var(--green);font-weight:850}
+.conversation-user-text{min-width:0;flex:1}
+.conversation-user-text b,.conversation-user-text small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conversation-user-text b{font-size:14px}
+.conversation-user-text small{color:var(--muted);font-size:11px;margin-top:3px}
+.conversation-time{color:var(--muted);font-size:10px;flex:none}
+.chat-panel{border:1px solid var(--line);border-radius:16px;background:#fff;padding:14px;display:flex;flex-direction:column;min-width:0}
+.chat-panel .message-person{margin-bottom:12px}
+.chat-panel .chat-messages{flex:1;min-height:330px;max-height:none;overflow:auto}
+@media(max-width:720px){
+  .messages-layout{grid-template-columns:1fr;min-height:0}
+  .conversation-list{max-height:300px}
+  .chat-panel{min-height:480px}
+}
