@@ -410,7 +410,7 @@ export default function DhurojeHome(){
     {editingListing&&<div className="page-screen"><EditListingModal listing={editingListing} onClose={()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();}} onSaved={async()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();await load();}}/></div>}
     {postChoice&&<div className="page-screen"><div className="page-content"><div className="modal auth-choice"><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Si dëshiron të vazhdosh?</h2></div><button type="button" className="close" onClick={()=>setPostChoice(false)}>×</button></div><p className="form-help">Për të dhuruar një gjë, zgjidh nëse ke llogari apo po poston për herë të parë.</p><button className="primary full" onClick={()=>choosePostAuth("login")}>Kam llogari · Hyr</button><button className="secondary full" onClick={()=>choosePostAuth("signup")}>Jam i ri · Krijo llogari</button></div></div></div>}
     {showAuth&&<div className="page-screen"><div className="page-content"><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>{postAuth?(authMode==="login"?"Hyr për të dhuruar":"Krijo llogari për të dhuruar"):(pendingPost?"Krijo llogari":"Krijo llogari")}</h2></div><button type="button" className="close" onClick={goHome}>×</button></div>{postAuth&&<p className="form-help">{authMode==="login"?"Hyr me llogarinë tënde dhe pastaj plotëso postimin.":"Krijo llogarinë tënde një herë dhe pastaj plotëso postimin."}</p>}{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Krijo llogari"}</button>{!pendingPost&&!postAuth&&<button type="button" className="secondary full" onClick={()=>{const next=authMode==="login"?"signup":"login";setAuthMode(next);const mode=postAuth?"post-"+next:next;navigatePage("auth",undefined,mode)}}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}{postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Jam i ri · Krijo llogari":"Kam llogari · Hyr"}</button>}</form></div></div>}
-    {showMessages&&<div className="page-screen"><Messages user={user} initialConversationId={messageConversationId} initialError={error} onClose={goHome} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id);}}/></div>}
+    {pageRoute.page==="saved"&&user&&<div className="page-screen"><SavedListings userId={user.id} favorites={favorites} onRemove={(id)=>toggleFavorite(id)} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id);}} onExplore={goHome}/></div>}\n    {showMessages&&<div className="page-screen"><Messages user={user} initialConversationId={messageConversationId} initialError={error} onClose={goHome} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id);}}/></div>}
     {showNotifications&&<div className="page-screen"><Notifications user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
@@ -419,7 +419,31 @@ export default function DhurojeHome(){
   </main>;
 }
 
-function PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onClose:()=>void;onChat?:()=>void;onListing?:(listing:Listing,image?:string)=>void}){
+function SavedListings({userId,favorites,onRemove,onListing,onExplore}:{userId:string;favorites:string[];onRemove:(id:string)=>void;onListing:(listing:Listing)=>void;onExplore:()=>void}){
+  const [rows,setRows]=useState<Listing[]>([]);
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      setLoading(true);
+      if(!favorites.length){if(!cancelled)setRows([]);setLoading(false);return;}
+      const {data,error:e}=await supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").in("id",favorites).eq("status","available");
+      if(!cancelled)setRows(e?[]:(data||[]) as Listing[]);
+      setLoading(false);
+    })();
+    return()=>{cancelled=true};
+  },[favorites]);
+  return <div className="page-content saved-page">
+    <div className="account-page-top"><div><p className="eyebrow">TË RUAJTURAT</p><h1>Ruajturat</h1><p className="account-email">Dhuratat që ke ruajtur për t'i parë më vonë.</p></div><button className="close account-close" onClick={onExplore} aria-label="Mbyll">×</button></div>
+    {loading?<div className="empty">Po ngarkohen të ruajturat…</div>:!rows.length?
+      <div className="saved-empty"><div className="messages-empty-icon">♡</div><h2>Nuk ke ruajtur ende asnjë dhuratë</h2><p>Eksploro dhuratat falas dhe ruaj ato që të pëlqejnë.</p><button className="primary" onClick={onExplore}>Shko në Eksploro</button></div>:
+      <section className="listing-grid">{rows.map(x=><article className="card" key={x.id} onClick={()=>onListing(x)}>
+        <div className="card-image"><span>{emoji(x.category)}</span><b>FALAS</b><button className="heart" onClick={e=>{e.stopPropagation();onRemove(x.id)}}>♥</button></div>
+        <div className="card-body"><div className="meta"><span>{categoryLabel[x.category]||x.category}</span><span>📍 {x.location_name||"Pranë teje"}</span></div><h3>{x.title}</h3><p>{x.description||"Pa përshkrim."}</p><div className="card-footer"><small>{x.owner?.display_name||"Përdorues"}</small><button className="claim" onClick={e=>{e.stopPropagation();onListing(x)}}>Shiko</button></div></div>
+      </article>)}</section>}
+  </div>;
+}
+\nfunction PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onClose:()=>void;onChat?:()=>void;onListing?:(listing:Listing,image?:string)=>void}){
   const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[posts,setPosts]=useState<Listing[]>([]),[postImages,setPostImages]=useState<Record<string,string>>({});
   useEffect(()=>{(async()=>{const [p,r,l]=await Promise.all([
     supabase.from("dhuroje_profiles").select("*").eq("id",userId).maybeSingle(),
