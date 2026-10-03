@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
 
 type Category = "Të gjitha" | "Ushqim" | "Veshmbathje" | "Shtëpi" | "Elektronikë" | "Fëmijë" | "Libra" | "Të tjera";
@@ -586,9 +586,11 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
   const [body,setBody]=useState("");
   const [loading,setLoading]=useState(true),[sending,setSending]=useState(false),[error,setError]=useState("");
   const [mobileChat,setMobileChat]=useState(false),[conversationSearch,setConversationSearch]=useState("");
+  const draftConversationRef=useRef<{id:string;hasMessages:boolean}>({id:"",hasMessages:true});
 
   async function load(){
     if(!user)return;
+    await supabase.rpc("dhuroje_cleanup_empty_conversations");
     setLoading(true);setError("");
     const {data:members,error:memberError}=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",user.id);
     if(memberError){setError("Nuk mund të ngarkoheshin bisedat. Provo përsëri.");setLoading(false);return;}
@@ -666,8 +668,15 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
       setMobileChat(true);
     }
   },[initialConversationId]);
+  useEffect(()=>()=>{
+    const draft=draftConversationRef.current;
+    if(draft.id&&!draft.hasMessages){
+      void supabase.rpc("dhuroje_cleanup_empty_conversations");
+    }
+  },[]);
 
   const selectedMessages=messages.filter(m=>m.conversation_id===selectedConversation);
+  draftConversationRef.current={id:selectedConversation,hasMessages:selectedMessages.length>0};
   const selected=conversations.find(c=>c.id===selectedConversation);
   const visibleConversations=conversations.filter(c=>{
     const q=conversationSearch.trim().toLowerCase();
@@ -713,7 +722,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
   return <div className="page-content messages-page">
     <div className="messages-topbar">
       <div><p className="eyebrow">INBOX</p><h1>Mesazhet</h1><p className="messages-subtitle">Bisedat me komunitetin dhe dhuratat që po ndjek.</p></div>
-      <button className="close account-close" onClick={onClose} aria-label="Mbyll">×</button>
+      <button className="close account-close" onClick={()=>{void supabase.rpc("dhuroje_cleanup_empty_conversations");onClose();}} aria-label="Mbyll">×</button>
     </div>
 
     {error&&<div className="message-error" role="alert">{error}</div>}
