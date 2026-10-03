@@ -206,16 +206,44 @@ export default function DhurojeHome(){
       food_refrigerated:categoryDb[String(f.get("category"))]==="food"&&f.get("food_refrigerated")==="on",food_opened:categoryDb[String(f.get("category"))]==="food"&&f.get("food_opened")==="on"
     }).select("*").single();
     if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return null;}
-    let uploaded=0;
-    for(let i=0;i<Math.min(files.length,6);i++){
+    const photoCount=Math.min(files.length,6);
+    // Upload the first photo separately and verify it is saved before continuing.
+    // This prevents the common case where photos 2+ exist but the primary photo is missing.
+    const first=files[0];
+    const firstExt=first.name.split(".").pop()?.toLowerCase()||"jpg";
+    const firstPath=postingUser.id+"/"+item.id+"/0-"+crypto.randomUUID()+"."+firstExt;
+    const firstUpload=await supabase.storage.from("dhuroje-listings").upload(firstPath,first,{contentType:first.type||"image/jpeg",upsert:false});
+    if(firstUpload.error){
+      setPhotoError(true);
+      setError("Fotoja e parë nuk u ngarkua. Prit derisa fotoja të jetë gati dhe provo përsëri.");
+      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
+      return null;
+    }
+    const {error:firstImageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:firstPath,sort_order:0});
+    if(firstImageError){
+      await supabase.storage.from("dhuroje-listings").remove([firstPath]);
+      setPhotoError(true);
+      setError("Fotoja e parë nuk u ruajt. Prit derisa fotoja të jetë gati dhe provo përsëri.");
+      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
+      return null;
+    }
+
+    // Confirm the primary image row exists before uploading the remaining photos.
+    const {data:firstSaved}=await supabase.from("dhuroje_listing_images").select("id,storage_path").eq("listing_id",item.id).eq("sort_order",0).maybeSingle();
+    if(!firstSaved){
+      setPhotoError(true);
+      setError("Fotoja e parë nuk është ende gati. Provo përsëri pasi të shfaqet në miniaturë.");
+      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
+      return null;
+    }
+
+    for(let i=1;i<photoCount;i++){
       const file=files[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg",path=postingUser.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
       const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
-      if(up.error){setError("Fotoja nuk u ngarkua. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
+      if(up.error){setError("Një foto nuk u ngarkua. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
       const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
-      if(imageError){await supabase.storage.from("dhuroje-listings").remove([path]);setError("Fotoja nuk u ruajt. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
-      uploaded++;
+      if(imageError){await supabase.storage.from("dhuroje-listings").remove([path]);setError("Një foto nuk u ruajt. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
     }
-    if(uploaded<1){setPhotoError(true);setError("Prit derisa të paktën një foto të jetë gati.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
     return item as Listing;
   }
   async function createListing(e:FormEvent<HTMLFormElement>){
