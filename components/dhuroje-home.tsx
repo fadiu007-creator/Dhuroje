@@ -560,7 +560,7 @@ function Notifications({user,onClose,onChanged}:{user:any;onClose:()=>void;onCha
 }
 
 function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
-  const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[stats,setStats]=useState({active:0,given:0}),[name,setName]=useState(""),[city,setCity]=useState(""),[age,setAge]=useState(""),[saving,setSaving]=useState(false);
+  const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[stats,setStats]=useState({active:0,given:0}),[name,setName]=useState(""),[city,setCity]=useState(""),[age,setAge]=useState(""),[phone,setPhone]=useState(""),[avatarFile,setAvatarFile]=useState<File|null>(null),[avatarPreview,setAvatarPreview]=useState(""),[saving,setSaving]=useState(false);
   async function load(){
     const [p,r,l]=await Promise.all([
       supabase.from("dhuroje_profiles").select("*").eq("id",user.id).maybeSingle(),
@@ -570,7 +570,7 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
     const reviewerIds=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];
     const {data:reviewerProfiles}=reviewerIds.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",reviewerIds):{data:[] as any[]};
     const rp=Object.fromEntries((reviewerProfiles||[]).map((x:any)=>[x.id,x]));
-    setProfile(p.data);setName(p.data?.display_name||"");setCity(p.data?.city||"");setAge(p.data?.age!=null?String(p.data.age):"");setReviews((r.data||[]).map((x:any)=>({...x,reviewer:rp[x.reviewer_id]})));
+    setProfile(p.data);setName(p.data?.display_name||"");setCity(p.data?.city||"");setAge(p.data?.age!=null?String(p.data.age):"");setPhone(p.data?.phone||"");setAvatarPreview(p.data?.avatar_url||"");setAvatarFile(null);setReviews((r.data||[]).map((x:any)=>({...x,reviewer:rp[x.reviewer_id]})));
     setStats({active:(l.data||[]).filter((x:any)=>x.status==="available").length,given:(l.data||[]).filter((x:any)=>x.status==="collected").length});
   }
   useEffect(()=>{load();},[user]);
@@ -578,7 +578,17 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
     e.preventDefault();setSaving(true);
     const cleanCity=city.trim().slice(0,80), parsedAge=age.trim()?Number(age):null;
     if(parsedAge!==null&&(!Number.isInteger(parsedAge)||parsedAge<13||parsedAge>120)){alert("Mosha duhet të jetë 13–120.");setSaving(false);return;}
-    const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues",city:cleanCity||null,age:parsedAge});
+    let avatar_url=profile?.avatar_url||null;
+    if(avatarFile){
+      if(avatarFile.size>5*1024*1024){alert("Fotoja duhet të jetë maksimumi 5 MB.");setSaving(false);return;}
+      if(!avatarFile.type.startsWith("image/")){alert("Zgjidh një foto.");setSaving(false);return;}
+      const ext=avatarFile.name.split(".").pop()?.toLowerCase()||"jpg";
+      const path=user.id+"/"+crypto.randomUUID()+"."+ext;
+      const up=await supabase.storage.from("dhuroje-avatars").upload(path,avatarFile,{contentType:avatarFile.type,upsert:false});
+      if(up.error){alert(up.error.message);setSaving(false);return;}
+      avatar_url=supabase.storage.from("dhuroje-avatars").getPublicUrl(path).data.publicUrl;
+    }
+    const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues",city:cleanCity||null,age:parsedAge,phone:phone.trim()||null,avatar_url});
     if(error)alert(error.message);else{await load();onChanged();}setSaving(false);
   }
   const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
@@ -586,8 +596,13 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
     <div className="modal profile-modal">
       <div className="modal-head"><div><p className="eyebrow">PROFILI IM</p><h2>{profile?.display_name||"Përdorues"}</h2><div className="profile-meta"><span>📍 {profile?.city||"Qyteti nuk është vendosur"}</span>{profile?.age!=null&&<span>🎂 {profile.age} vjeç</span>}<span>Anëtar që nga {profile?.created_at?new Date(profile.created_at).toLocaleDateString("sq-AL"):new Date(user.created_at).toLocaleDateString("sq-AL")}</span></div></div><button className="close" onClick={onClose}>×</button></div>
       <form className="profile-form" onSubmit={save}>
+        <div className="profile-photo-editor">
+          <div className="profile-photo-preview">{avatarPreview?<img src={avatarPreview} alt="Foto e profilit" />:<span>{(name||user.email||"P").slice(0,1).toUpperCase()}</span>}</div>
+          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*" onChange={e=>{const file=e.target.files?.[0]||null;setAvatarFile(file);if(file)setAvatarPreview(URL.createObjectURL(file));}}/></label><small className="form-help">Foto e profilit · opsionale · max 5 MB</small></div>
+        </div>
         <label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
         <label>Qyteti<input value={city} onChange={e=>setCity(e.target.value)} maxLength={80} placeholder="p.sh. Ferizaj"/></label>
+        <label>Numri i telefonit <span className="form-help">opsionale</span><input value={phone} onChange={e=>setPhone(e.target.value.replace(/[^0-9+ ()-]/g,"").slice(0,25))} inputMode="tel" type="tel" maxLength={25} placeholder="+383 4x xxx xxx"/></label>
         <label>Mosha <span className="form-help">opsionale</span><input value={age} onChange={e=>setAge(e.target.value.replace(/[^0-9]/g,"").slice(0,3))} inputMode="numeric" type="text" maxLength={3} placeholder="p.sh. 28"/></label>
         <button className="secondary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj profilin"}</button>
       </form>
@@ -862,7 +877,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
     </div>
 
     <div className="account-hero">
-      <div className="account-avatar">{(profile?.display_name||user.email||"P").slice(0,1).toUpperCase()}</div>
+      <div className="account-avatar">{profile?.avatar_url?<img src={profile.avatar_url} alt="" />:(profile?.display_name||user.email||"P").slice(0,1).toUpperCase()}</div>
       <div className="account-hero-main">
         <h2>{profile?.display_name||user.email?.split("@")[0]||"Përdorues"}</h2>
         <p>📍 {profile?.city||"Qyteti nuk është vendosur"}{profile?.age!=null&&<> · 🎂 {profile.age} vjeç</>}</p>
@@ -888,6 +903,8 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
       <div className="account-section-head"><div><p className="eyebrow">PERSONALE</p><h2>Informacioni personal</h2><p>Detajet që shfaqen në profilin tënd te Dhuroje.</p></div><button className="secondary" onClick={onProfile}>Ndrysho</button></div>
       <div className="personal-details">
         <div><span>👤 Emri</span><b>{profile?.display_name||"—"}</b></div>
+        <div><span>📞 Telefoni</span><b>{profile?.phone||"—"}</b></div>
+        <div><span>📷 Foto profili</span><b>{profile?.avatar_url?"E vendosur":"Nuk është vendosur"}</b></div>
         <div><span>📍 Qyteti</span><b>{profile?.city||"—"}</b></div>
         <div><span>🎂 Mosha</span><b>{profile?.age!=null?profile.age+" vjeç":"—"}</b></div>
         <div><span>✉️ Email</span><b>{user.email||"—"}</b></div>
