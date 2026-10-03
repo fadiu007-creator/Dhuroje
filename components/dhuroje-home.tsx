@@ -678,6 +678,14 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
     setWanted((myClaims||[]).filter((x:any)=>x.status!=="cancelled") as any[]);
   }
   useEffect(()=>{load();},[user]);
+  useEffect(()=>{
+    const sync=()=>{
+      const s=new URLSearchParams(window.location.search).get("section")||"overview";
+      setSection(s==="listings"||s==="requested"?s:"overview");
+    };
+    window.addEventListener("popstate",sync);
+    return()=>window.removeEventListener("popstate",sync);
+  },[]);
 
   function goSection(next:"overview"|"listings"|"requested"){
     setSection(next);
