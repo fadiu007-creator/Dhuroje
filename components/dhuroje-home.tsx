@@ -436,7 +436,7 @@ function SavedListings({userId,favorites,onRemove,onListing,onExplore}:{userId:s
   return <div className="page-content saved-page">
     <div className="account-page-top"><div><p className="eyebrow">TË RUAJTURAT</p><h1>Ruajturat</h1><p className="account-email">Dhuratat që ke ruajtur për t'i parë më vonë.</p></div><button className="close account-close" onClick={onExplore} aria-label="Mbyll">×</button></div>
     {loading?<div className="empty">Po ngarkohen të ruajturat…</div>:!rows.length?
-      <div className="saved-empty"><div className="messages-empty-icon">♡</div><h2>Nuk ke ruajtur ende asnjë dhuratë</h2><p>Eksploro dhuratat falas dhe ruaj ato që të pëlqejnë.</p><button className="primary" onClick={onExplore}>Shko në Eksploro</button></div>:
+      <div className="saved-empty"><div className="messages-empty-icon">♡</div><h2>Nuk ke ruajtur ende asnjë dhuratë</h2><p>Eksploro dhuratat falas dhe ruaj ato që të pëlqejnë.</p><button className="primary" onClick={onExplore}>Eksploro</button></div>:
       <section className="listing-grid">{rows.map(x=><article className="card" key={x.id} onClick={()=>onListing(x)}>
         <div className="card-image"><span>{emoji(x.category)}</span><b>FALAS</b><button className="heart" onClick={e=>{e.stopPropagation();onRemove(x.id)}}>♥</button></div>
         <div className="card-body"><div className="meta"><span>{categoryLabel[x.category]||x.category}</span><span>📍 {x.location_name||"Pranë teje"}</span></div><h3>{x.title}</h3><p>{x.description||"Pa përshkrim."}</p><div className="card-footer"><small>{x.owner?.display_name||"Përdorues"}</small><button className="claim" onClick={e=>{e.stopPropagation();onListing(x)}}>Shiko</button></div></div>
