@@ -469,7 +469,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     <label>Çfarë po dhuron?<input name="title" defaultValue={listing.title} required /></label>
     <label>Kategoria<select name="category" value={category} onChange={e=>setCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x} value={categoryDb[x]}>{x}</option>)}</select></label>
     <label>Përshkrimi<textarea name="description" defaultValue={listing.description||""}/></label>
-    <label>Lokacioni<input name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} placeholder="Qyteti / zona" /></label>
+    <label>Qyteti<select name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
     <label>Disponueshme deri<input name="available_until" type="datetime-local" defaultValue={localDate(listing.available_until)}/></label>
     {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><label>Afati i ushqimit<input name="food_best_before" type="datetime-local" defaultValue={localDate(listing.food_best_before)}/></label><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
