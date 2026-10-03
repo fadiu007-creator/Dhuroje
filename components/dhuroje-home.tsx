@@ -258,7 +258,7 @@ export default function DhurojeHome(){
   function openPosting(){
     setError("");
     setPostingCategory("Ushqim");
-    if(user){setPostChoice(false);setShowGive(true);return;}
+    if(user){setPostChoice(false);setShowGive(true);navigatePage("post");return;}
     setPostChoice(true);setShowGive(false);
   }
   function choosePostAuth(mode:"login"|"signup"){
