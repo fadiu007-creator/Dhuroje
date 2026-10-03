@@ -325,3 +325,11 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 .route-shell .close{
   position:relative!important;
 }
+
+
+/* True routed pages: no modal/backdrop positioning. */
+.page-screen{position:fixed!important;inset:0!important;z-index:1000!important;width:100vw!important;height:100dvh!important;min-height:100dvh!important;overflow-y:auto!important;overflow-x:hidden!important;background:#fff!important;display:block!important}
+.page-content{width:100%!important;max-width:960px!important;min-height:100dvh!important;margin:0 auto!important;padding:0 20px 100px!important;box-sizing:border-box!important;background:#fff!important}
+.page-screen>.modal-backdrop{position:static!important;inset:auto!important;display:block!important;width:100%!important;min-height:100dvh!important;padding:0!important;background:#fff!important}
+.page-screen>.modal-backdrop>.modal,.page-screen>.modal{position:relative!important;inset:auto!important;transform:none!important;width:100%!important;max-width:960px!important;min-height:100dvh!important;max-height:none!important;margin:0 auto!important;border-radius:0!important;box-shadow:none!important;box-sizing:border-box!important;overflow:visible!important;background:#fff!important}
+.page-screen .modal-head{position:sticky!important;top:0!important;z-index:5!important;background:#fff!important}
