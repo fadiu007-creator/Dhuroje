@@ -661,6 +661,342 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
     </div>
   </div>;
 }
+function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void}){
+  const [section,setSection]=useState<"overview"|"listings"|"requested">("overview");
+  const [mine,setMine]=useState<Listing[]>([]),[wanted,setWanted]=useState<Claim[]>([]),[busy,setBusy]=useState(false);
+  async function load(){if(!user)return;const [{data:ls},{data:myClaims}]=await Promise.all([
+    supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("owner_id",user.id).order("created_at",{ascending:false}),
+    supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url))").eq("claimant_id",user.id).order("created_at",{ascending:false})
+  ]);setMine((ls||[]) as Listing[]);setWanted((myClaims||[]).filter((x:any)=>x.status!=="cancelled") as any[]);}
+  useEffect(()=>{load();},[user]);
+  const activeMine=mine.filter(x=>["available","reserved"].includes(x.status)),requestedCount=wanted.filter((x:any)=>["pending","accepted"].includes(x.status)).length;
+  async function deleteLocal(listing:Listing){if(!window.confirm("Ta fshij përgjithmonë këtë shpallje?"))return;setBusy(true);const {error}=await supabase.rpc("dhuroje_delete_listing",{p_listing_id:listing.id});if(error)alert(error.message);else{await load();onChanged();}setBusy(false);}
+  return <div className="modal-backdrop dashboard-page-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal dashboard personal-dashboard">
+      <div className="modal-head"><div><p className="eyebrow">LLOGARIA IME</p><h2>Profili im</h2><small>{user.email}</small></div><button className="close" onClick={onClose}>×</button></div>
+      <div className="account-header"><div className="account-avatar">●</div><div><h3>{profile?.display_name||user.email?.split("@")[0]||"Përdorues"}</h3><p>📍 {profile?.city||"Qyteti nuk është vendosur"}{profile?.age!=null&&<> · 🎂 {profile.age} vjeç</>}</p></div><button className="secondary" onClick={onProfile}>✏️ Personalizo profilin</button></div>
+      <div className="account-menu">
+        <button className="account-menu-item active" onClick={()=>setSection("overview")}><span>👤</span><b>Informacioni personal</b><small>Emri, qyteti, mosha dhe vlerësimet</small></button>
+        <button className="account-menu-item" onClick={onMessages}><span>💬</span><b>Mesazhet</b><small>Bisedat me dhurues dhe kërkues</small></button>
+        <button className={section==="listings"?"account-menu-item active":"account-menu-item"} onClick={()=>setSection("listings")}><span>🎁</span><b>Shpalljet e mia</b><small>{activeMine.length} aktive · {mine.filter(x=>x.status==="collected").length} të dhuruara</small></button>
+        <button className="account-menu-item" onClick={onSaved}><span>♥</span><b>Të ruajturat / të pëlqyerat</b><small>Gjërat që ke ruajtur</small></button>
+        <button className={section==="requested"?"account-menu-item active":"account-menu-item"} onClick={()=>setSection("requested")}><span>🙋</span><b>Dhuratat e kërkuara</b><small>{requestedCount} kërkesa aktive</small></button>
+      </div>
+      {section==="overview"&&<div className="account-overview"><div className="profile-stats"><div><b>{activeMine.length}</b><small>aktive</small></div><div><b>{mine.filter(x=>x.status==="collected").length}</b><small>të dhuruara</small></div><div><b>{requestedCount}</b><small>të kërkuara</small></div></div><div className="account-info-card"><h3>Informacioni personal</h3><div><span>👤 Emri</span><b>{profile?.display_name||"—"}</b></div><div><span>📍 Qyteti</span><b>{profile?.city||"—"}</b></div><div><span>🎂 Mosha</span><b>{profile?.age!=null?profile.age+" vjeç":"—"}</b></div><div><span>📅 Anëtar që nga</span><b>{new Date(profile?.created_at||user.created_at).toLocaleDateString("sq-AL")}</b></div><button className="secondary full" onClick={onProfile}>Ndrysho informacionin</button></div></div>}
+      {section==="listings"&&<div className="dash-list">{activeMine.length?activeMine.map(x=><div className="dash-row" key={x.id} onClick={()=>onListing(x)}><span className="dash-icon">{emoji(x.category)}</span><div><b>{x.title}</b><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"} · {x.location_name||"Pa lokacion"}</small></div><button disabled={busy} onClick={e=>{e.stopPropagation();onEdit(x)}}>✏️</button><button disabled={busy} onClick={e=>{e.stopPropagation();onMarkGiven(x)}}>✓</button><button disabled={busy} className="danger" onClick={e=>{e.stopPropagation();deleteLocal(x)}}>🗑️</button></div>):<div className="empty">Nuk ke shpallje aktive.</div>}</div>}
+      {section==="requested"&&<div className="dash-list">{wanted.length?wanted.map((x:any)=><div className="dash-row" key={x.id} onClick={()=>x.listing&&onListing(x.listing)}><span className="dash-icon">{emoji(x.listing?.category||"other")}</span><div><b>{x.listing?.title||"Dhuratë"}</b><small>{x.status==="pending"?"Në pritje":x.status==="accepted"?"Pranuar":x.status} · {x.listing?.location_name||""}</small></div>{x.status==="pending"&&<button disabled={busy} className="danger" onClick={async e=>{e.stopPropagation();setBusy(true);const r=await supabase.from("dhuroje_claims").update({status:"cancelled"}).eq("id",x.id).eq("claimant_id",user.id).eq("status","pending");if(r.error)alert(r.error.message);await load();setBusy(false);}}>↩ Tërhiq</button>}{x.status==="accepted"&&x.listing&&<button onClick={e=>{e.stopPropagation();onChat(x.listing,x.listing.owner_id)}}>💬 Mesazho</button>}</div>):<div className="empty">Nuk ke kërkuar ende ndonjë dhuratë.</div>}</div>}
+    </div>
+  </div>;
+}
+function PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onClose:()=>void;onChat?:()=>void;onListing?:(listing:Listing,image?:string)=>void}){
+  const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[posts,setPosts]=useState<Listing[]>([]),[postImages,setPostImages]=useState<Record<string,string>>({});
+  useEffect(()=>{(async()=>{const [p,r,l]=await Promise.all([
+    supabase.from("dhuroje_profiles").select("*").eq("id",userId).maybeSingle(),
+    supabase.from("dhuroje_reviews").select("*").eq("reviewed_id",userId).order("created_at",{ascending:false}),
+    supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("owner_id",userId).in("status",["available","reserved"]).order("created_at",{ascending:false})
+  ]);const ids=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];const {data:rp}=ids.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",ids):{data:[] as any[]};const map=Object.fromEntries((rp||[]).map((x:any)=>[x.id,x]));const ls=(l.data||[]) as Listing[];if(ls.length){const {data:ims}=await supabase.from("dhuroje_listing_images").select("listing_id,storage_path,sort_order").in("listing_id",ls.map(x=>x.id)).order("sort_order");const first:Record<string,string>={};(ims||[]).forEach((im:any)=>{if(!first[im.listing_id])first[im.listing_id]=supabase.storage.from("dhuroje-listings").getPublicUrl(im.storage_path).data.publicUrl;});setPostImages(first);}setProfile(p.data);setReviews((r.data||[]).map((x:any)=>({...x,reviewer:map[x.reviewer_id]})));setPosts(ls);})()},[userId]);
+  const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal profile-modal">
+    <div className="modal-head"><div><p className="eyebrow">DHURUESI</p><h2>{profile?.display_name||"Përdorues i regjistruar"}</h2><div className="profile-meta">{profile?.city&&<span>📍 {profile.city}</span>}{profile?.age!=null&&<span>🎂 {profile.age} vjeç</span>}{profile?.created_at&&<span>Anëtar që nga {new Date(profile.created_at).toLocaleDateString("sq-AL")}</span>}</div></div><button className="close" onClick={onClose}>×</button></div>
+    <div className="profile-stats"><div><b>{posts.length}</b><small>shpallje aktive</small></div><div><b>{reviews.length}</b><small>vlerësime</small></div><div><b>{avg?avg.toFixed(1):"—"}</b><small>⭐ mesatare</small></div></div>
+    {onChat&&<button className="secondary full" onClick={onChat}>💬 Mesazho</button>}
+    <div className="profile-posts"><h3>Shpalljet e këtij dhuruesi</h3>{posts.length?<div className="public-profile-posts">{posts.map(x=><button className="public-profile-post" key={x.id} onClick={()=>onListing?.(x,postImages[x.id])}><span className="public-profile-post-image">{postImages[x.id]?<img src={postImages[x.id]} alt=""/>:<span>{emoji(x.category)}</span>}</span><span><b>{x.title}</b><small>{categoryLabel[x.category]||x.category} · {x.location_name||"Pranë teje"}</small><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"}</small></span></button>)}</div>:<div className="empty">Ky dhurues nuk ka shpallje aktive.</div>}</div>
+    <div className="profile-reviews"><h3>Vlerësimet</h3>{reviews.length?reviews.map(r=><div className="review-row" key={r.id}><div><b>{r.reviewer?.display_name||"Përdorues"}</b><span>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</span></div><p>{r.comment||"Pa koment."}</p></div>):<div className="empty">Nuk ka ende vlerësime.</div>}</div>
+  </div></div>;
+}
+
+function ListingDetail({listing,image,saved,claimed,isOwner,onClose,onClaim,onSave,onChat,onEdit,onMarkGiven,onDelete,onProfile}:{listing:Listing;image?:string;saved:boolean;claimed:boolean;isOwner:boolean;onClose:()=>void;onClaim:()=>void;onSave:()=>void;onChat:()=>void;onEdit:()=>void;onMarkGiven:()=>void;onDelete:()=>void;onProfile:()=>void}){
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><p className="eyebrow">{categoryLabel[listing.category]||listing.category}</p><h2>{listing.title}</h2></div><button className="close" onClick={onClose}>×</button></div>{image?<img className="detail-image" src={image} alt=""/>:<div className="detail-emoji">{emoji(listing.category)}</div>}<p>{listing.description||"Pa përshkrim."}</p><button className="poster-line poster-button" onClick={onProfile}>👤 <strong>{listing.owner?.display_name||"Përdorues i regjistruar"}</strong> · Dhurues</button><p>📍 {listing.location_name||"Pranë teje"}</p><p>🕒 Postuar më {new Date(listing.created_at).toLocaleDateString("sq-AL")}</p>{listing.available_until&&<p>📅 E disponueshme deri më {new Date(listing.available_until).toLocaleString("sq-AL",{dateStyle:"medium",timeStyle:"short"})}</p>}{listing.food_best_before&&<p>🍎 Afati: {new Date(listing.food_best_before).toLocaleDateString("sq-AL")}</p>}{listing.food_refrigerated&&<p>❄️ Kërkon frigorifer</p>}{listing.food_opened&&<p>📦 E hapur</p>}<div className="detail-actions">{isOwner?<><button className="primary" onClick={onEdit}>✏️ Ndrysho shpalljen</button><button className="secondary" onClick={onMarkGiven}>✓ Shëno si të dhuruar</button><button className="secondary danger" onClick={onDelete}>🗑️ Fshi shpalljen</button></>:<><button className="primary" onClick={onClaim}>{claimed?"Hiq kërkesën":"Kërko këtë dhuratë"}</button><button className="secondary" onClick={onChat}>💬 Mesazho dhuruesin</button></>}<button className="secondary" onClick={onSave}>{saved?"♥ Ruajtur":"♡ Ruaje"}</button></div></div></div>;
+}
+
+function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=>void;onSaved:()=>Promise<void>}){
+  const [category,setCategory]=useState(listing.category);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
+  const [photos,setPhotos]=useState<any[]>([]);
+  const [newFiles,setNewFiles]=useState<File[]>([]);
+  const [removePhotoIds,setRemovePhotoIds]=useState<string[]>([]);
+  const [locationName,setLocationName]=useState(listing.location_name||"");
+  const [lat,setLat]=useState<number|null>(listing.latitude);
+  const [lon,setLon]=useState<number|null>(listing.longitude);
+
+  useEffect(()=>{
+    supabase.from("dhuroje_listing_images").select("*").eq("listing_id",listing.id).order("sort_order").then(({data})=>{
+      setPhotos((data||[]).map((x:any)=>({...x,url:supabase.storage.from("dhuroje-listings").getPublicUrl(x.storage_path).data.publicUrl})));
+    });
+  },[listing.id]);
+
+  function captureLocation(){
+    if(!navigator.geolocation){setError("Ky shfletues nuk mbështet lokacionin.");return;}
+    navigator.geolocation.getCurrentPosition(p=>{setLat(p.coords.latitude);setLon(p.coords.longitude);setLocationName("Lokacioni im");},()=>setError("Lokacioni nuk u lejua."));
+  }
+
+  async function save(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();setSaving(true);setError("");
+    const f=new FormData(e.currentTarget);
+    const categoryValue=String(f.get("category"));
+    const isFood=categoryValue==="food";
+    const {error:e1}=await supabase.from("dhuroje_listings").update({
+      title:String(f.get("title")||"").trim(),
+      description:String(f.get("description")||"").trim(),
+      category:categoryValue,
+      location_name:String(f.get("location_name")||"").trim()||null,
+      latitude:lat,longitude:lon,
+      available_until:f.get("available_until")?new Date(String(f.get("available_until"))).toISOString():null,
+      food_best_before:isFood&&f.get("food_best_before")?new Date(String(f.get("food_best_before"))).toISOString():null,
+      food_refrigerated:isFood&&f.get("food_refrigerated")==="on",
+      food_opened:isFood&&f.get("food_opened")==="on"
+    }).eq("id",listing.id).eq("owner_id",(await supabase.auth.getUser()).data.user?.id||"");
+    if(e1){setError(e1.message);setSaving(false);return;}
+
+    const removeRows=photos.filter(x=>removePhotoIds.includes(x.id));
+    if(removeRows.length){
+      await supabase.from("dhuroje_listing_images").delete().in("id",removeRows.map(x=>x.id));
+      await supabase.storage.from("dhuroje-listings").remove(removeRows.map(x=>x.storage_path));
+    }
+    const remaining=photos.filter(x=>!removePhotoIds.includes(x.id));
+    for(let i=0;i<Math.min(newFiles.length,6);i++){
+      const file=newFiles[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg";
+      const path=listing.owner_id+"/"+listing.id+"/"+(remaining.length+i)+"-"+crypto.randomUUID()+"."+ext;
+      const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
+      if(up.error){setError(up.error.message);setSaving(false);return;}
+      const ins=await supabase.from("dhuroje_listing_images").insert({listing_id:listing.id,storage_path:path,sort_order:remaining.length+i});
+      if(ins.error){setError(ins.error.message);setSaving(false);return;}
+    }
+    setSaving(false);
+    await onSaved();
+  }
+
+  const localDate=(v:string|null)=>v?new Date(v).toISOString().slice(0,16):"";
+  return <div className="modal-backdrop edit-modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal" onSubmit={save}>
+    <div className="modal-head"><div><p className="eyebrow">EDITO SHPALLJEN</p><h2>Ndrysho shpalljen</h2></div><button type="button" className="close" onClick={onClose}>×</button></div>
+    {error&&<div className="error">{error}</div>}
+    <label>Çfarë po dhuron?<input name="title" defaultValue={listing.title} required /></label>
+    <label>Kategoria<select name="category" value={category} onChange={e=>setCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x} value={categoryDb[x]}>{x}</option>)}</select></label>
+    <label>Përshkrimi<textarea name="description" defaultValue={listing.description||""}/></label>
+    <label>Lokacioni<input name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} placeholder="Qyteti / zona" /></label>
+    <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
+    <label>Disponueshme deri<input name="available_until" type="datetime-local" defaultValue={localDate(listing.available_until)}/></label>
+    {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><label>Afati i ushqimit<input name="food_best_before" type="datetime-local" defaultValue={localDate(listing.food_best_before)}/></label><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
+    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={e=>setNewFiles(Array.from(e.target.files||[]).slice(0,6))}/></label></div>
+    <button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj ndryshimet"}</button>
+  </form></div>;
+}
+
+function Notifications({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
+  const [rows,setRows]=useState<any[]>([]),[loading,setLoading]=useState(true);
+  async function load(){
+    setLoading(true);
+    const {data}=await supabase.from("dhuroje_notifications").select("*").eq("recipient_id",user.id).order("created_at",{ascending:false}).limit(50);
+    setRows(data||[]);setLoading(false);
+  }
+  useEffect(()=>{load();},[user]);
+  async function markRead(id?:string){
+    const q=supabase.from("dhuroje_notifications").update({read_at:new Date().toISOString()}).eq("recipient_id",user.id).is("read_at",null);
+    if(id) await supabase.from("dhuroje_notifications").update({read_at:new Date().toISOString()}).eq("id",id).eq("recipient_id",user.id);
+    else await q;
+    await load();onChanged();
+  }
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal notifications-modal">
+      <div className="modal-head"><div><p className="eyebrow">AKTIVITETI</p><h2>Njoftimet</h2></div><div className="modal-head-actions"><button className="text-button" onClick={()=>markRead()}>Shëno të gjitha si të lexuara</button><button className="close" onClick={onClose}>×</button></div></div>
+      {loading?<div className="empty">Po ngarkohen…</div>:!rows.length?<div className="empty">Nuk ke njoftime ende.</div>:<div className="notification-list">{rows.map(n=><button key={n.id} className={n.read_at?"notification read":"notification"} onClick={()=>markRead(n.id)}><span className="notification-icon">{n.type==="message"?"💬":n.type==="claim"?"🙋":n.type==="pickup"?"📅":n.type==="completed"?"🎉":n.type==="review"?"⭐":"🔔"}</span><span><b>{n.title}</b><small>{n.body}</small><small>{new Date(n.created_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"})}</small></span></button>)}</div>}
+    </div>
+  </div>;
+}
+
+function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
+  const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[stats,setStats]=useState({active:0,given:0}),[name,setName]=useState(""),[city,setCity]=useState(""),[age,setAge]=useState(""),[saving,setSaving]=useState(false);
+  async function load(){
+    const [p,r,l]=await Promise.all([
+      supabase.from("dhuroje_profiles").select("*").eq("id",user.id).maybeSingle(),
+      supabase.from("dhuroje_reviews").select("*").eq("reviewed_id",user.id).order("created_at",{ascending:false}),
+      supabase.from("dhuroje_listings").select("status").eq("owner_id",user.id)
+    ]);
+    const reviewerIds=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];
+    const {data:reviewerProfiles}=reviewerIds.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",reviewerIds):{data:[] as any[]};
+    const rp=Object.fromEntries((reviewerProfiles||[]).map((x:any)=>[x.id,x]));
+    setProfile(p.data);setName(p.data?.display_name||"");setCity(p.data?.city||"");setAge(p.data?.age!=null?String(p.data.age):"");setReviews((r.data||[]).map((x:any)=>({...x,reviewer:rp[x.reviewer_id]})));
+    setStats({active:(l.data||[]).filter((x:any)=>x.status==="available").length,given:(l.data||[]).filter((x:any)=>x.status==="collected").length});
+  }
+  useEffect(()=>{load();},[user]);
+  async function save(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();setSaving(true);
+    const cleanCity=city.trim().slice(0,80), parsedAge=age.trim()?Number(age):null;
+    if(parsedAge!==null&&(!Number.isInteger(parsedAge)||parsedAge<13||parsedAge>120)){alert("Mosha duhet të jetë 13–120.");setSaving(false);return;}
+    const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues",city:cleanCity||null,age:parsedAge});
+    if(error)alert(error.message);else{await load();onChanged();}setSaving(false);
+  }
+  const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal profile-modal">
+      <div className="modal-head"><div><p className="eyebrow">PROFILI IM</p><h2>{profile?.display_name||"Përdorues"}</h2><div className="profile-meta"><span>📍 {profile?.city||"Qyteti nuk është vendosur"}</span>{profile?.age!=null&&<span>🎂 {profile.age} vjeç</span>}<span>Anëtar që nga {profile?.created_at?new Date(profile.created_at).toLocaleDateString("sq-AL"):new Date(user.created_at).toLocaleDateString("sq-AL")}</span></div></div><button className="close" onClick={onClose}>×</button></div>
+      <form className="profile-form" onSubmit={save}>
+        <label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
+        <label>Qyteti<input value={city} onChange={e=>setCity(e.target.value)} maxLength={80} placeholder="p.sh. Ferizaj"/></label>
+        <label>Mosha <span className="form-help">opsionale</span><input value={age} onChange={e=>setAge(e.target.value.replace(/[^0-9]/g,"").slice(0,3))} inputMode="numeric" type="text" maxLength={3} placeholder="p.sh. 28"/></label>
+        <button className="secondary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj profilin"}</button>
+      </form>
+      <div className="profile-stats"><div><b>{stats.active}</b><small>aktive</small></div><div><b>{stats.given}</b><small>të dhuruara</small></div><div><b>{avg?avg.toFixed(1):"—"}</b><small>⭐ {reviews.length} vlerësime</small></div></div>
+      <div className="profile-reviews"><h3>Vlerësimet</h3>{reviews.length?reviews.map(r=><div className="review-row" key={r.id}><div><b>{r.reviewer?.display_name||"Përdorues"}</b><span>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</span></div><p>{r.comment||"Pa koment."}</p><small>{new Date(r.created_at).toLocaleDateString("sq-AL")}</small></div>):<div className="empty">Nuk ke marrë ende vlerësime. Pas një marrjeje të përfunduar, mund të vlerësoheni nga njëri-tjetri.</div>}</div>
+    </div>
+  </div>;
+}
+
+function ReviewModal({user,targetId,listingId,listingTitle,onClose,onSaved}:{user:any;targetId:string;listingId:string;listingTitle:string;onClose:()=>void;onSaved:()=>void}){
+  const [rating,setRating]=useState(5),[comment,setComment]=useState(""),[saving,setSaving]=useState(false);
+  async function save(e:FormEvent<HTMLFormElement>){e.preventDefault();setSaving(true);const {error}=await supabase.from("dhuroje_reviews").insert({reviewer_id:user.id,reviewed_id:targetId,listing_id:listingId,rating,comment:comment.trim()||null});if(error)alert(error.code==="23505"?"E ke vlerësuar tashmë këtë dhurojë.":error.message);else{onSaved();onClose();}setSaving(false);}
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal review-modal" onSubmit={save}><div className="modal-head"><div><p className="eyebrow">PAS MARRJES</p><h2>Vlerëso dhurojën</h2><small>{listingTitle}</small></div><button type="button" className="close" onClick={onClose}>×</button></div><div className="rating-picker">{[1,2,3,4,5].map(n=><button type="button" key={n} className={n<=rating?"selected":""} onClick={()=>setRating(n)}>★</button>)}</div><label>Komenti<textarea value={comment} onChange={e=>setComment(e.target.value)} maxLength={500} placeholder="Si ishte përvoja?"/></label><button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Publiko vlerësimin"}</button></form></div>;
+}
+
+function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>void;initialConversationId?:string}){
+  const [conversations,setConversations]=useState<any[]>([]);
+  const [messages,setMessages]=useState<any[]>([]);
+  const [selectedConversation,setSelectedConversation]=useState<string>("");
+  const [body,setBody]=useState("");
+  const [loading,setLoading]=useState(true);
+  const [targetConversation,setTargetConversation]=useState<string>(initialConversationId||"");
+
+  async function load(){
+    if(!user)return;
+    setLoading(true);
+    const {data:members,error:memberError}=await supabase
+      .from("dhuroje_conversation_members")
+      .select("conversation_id")
+      .eq("user_id",user.id);
+    if(memberError){setLoading(false);return;}
+
+    const ids=(members||[]).map((x:any)=>x.conversation_id);
+    if(!ids.length){
+      setConversations([]);
+      setMessages([]);
+      setSelectedConversation("");
+      setLoading(false);
+      return;
+    }
+
+    const {data:cs}=await supabase
+      .from("dhuroje_conversations")
+      .select("id,listing_id,created_at")
+      .in("id",ids)
+      .order("created_at",{ascending:false});
+
+    const rows=cs||[];
+    const listingIds=rows.map((x:any)=>x.listing_id).filter(Boolean);
+    const {data:listingsData}=listingIds.length
+      ?await supabase.from("dhuroje_listings").select("id,title,owner_id").in("id",listingIds)
+      :{data:[] as any[]};
+
+    const {data:allMembers}=await supabase
+      .from("dhuroje_conversation_members")
+      .select("conversation_id,user_id")
+      .in("conversation_id",ids);
+
+    const otherIds=(allMembers||[])
+      .filter((m:any)=>m.user_id!==user.id)
+      .map((m:any)=>m.user_id);
+    const {data:profiles}=otherIds.length
+      ?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",[...new Set(otherIds)])
+      :{data:[] as any[]};
+
+    const listingMap=Object.fromEntries((listingsData||[]).map((x:any)=>[x.id,x]));
+    const profileMap=Object.fromEntries((profiles||[]).map((x:any)=>[x.id,x]));
+    const otherByConversation:Record<string,string>={};
+    (allMembers||[]).forEach((m:any)=>{
+      if(m.user_id!==user.id)otherByConversation[m.conversation_id]=m.user_id;
+    });
+
+    const {data:ms}=await supabase
+      .from("dhuroje_messages")
+      .select("*")
+      .in("conversation_id",ids)
+      .order("created_at",{ascending:true});
+    const sentOrReceivedIds=new Set((ms||[]).map((m:any)=>m.conversation_id));
+
+    // Only show conversations where an actual message has been sent or received.
+    const enriched=rows
+      .filter((c:any)=>sentOrReceivedIds.has(c.id))
+      .map((c:any)=>({
+        ...c,
+        listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
+        otherUserId:otherByConversation[c.id],
+        otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues"
+      }));
+    setConversations(enriched);
+    setMessages(ms||[]);
+
+    setSelectedConversation(current=>{
+      const preferred=initialConversationId&&enriched.some(c=>c.id===initialConversationId)?initialConversationId:"";
+      if(preferred)return preferred;
+      if(current&&enriched.some(c=>c.id===current))return current;
+      return enriched[0]?.id||"";
+    });
+    if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))setTargetConversation(initialConversationId);
+    setLoading(false);
+  }
+
+  useEffect(()=>{load();},[user]);
+
+  useEffect(()=>{
+    if(!user)return;
+    const ch=supabase.channel("all-user-messages-"+user.id)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"dhuroje_messages"},()=>load())
+      .subscribe();
+    return()=>{supabase.removeChannel(ch);};
+  },[user]);
+
+  const selectedMessages=messages.filter(m=>m.conversation_id===selectedConversation);
+  const selected=conversations.find(c=>c.id===selectedConversation);
+
+  async function send(){
+    const text=body.trim();
+    if(!selectedConversation||!text)return;
+    const {error}=await supabase.from("dhuroje_messages").insert({
+      conversation_id:selectedConversation,
+      sender_id:user.id,
+      body:text
+    });
+    if(error)alert(error.message);
+    else{
+      setBody("");
+      await load();
+    }
+  }
+
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal messages-modal">
+      <div className="modal-head">
+        <div><p className="eyebrow">MESAZHET</p><h2>Mesazhet</h2></div>
+        <button className="close" onClick={onClose}>×</button>
+      </div>
+
+      {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
+        <div className="empty">Nuk ke ende mesazhe.</div>:
+        <>
+          {!targetConversation&&<label className="message-context">
+            <span>Postimi / kërkesa</span>
+            <select value={selectedConversation} onChange={e=>setSelectedConversation(e.target.value)}>
+              {conversations.map(c=><option key={c.id} value={c.id}>{c.otherName} · {c.listingTitle}</option>)}
+            </select>
+          </label>}
+          {targetConversation&&selected&&<div className="message-person"><span>👤</span><div><b>{selected.otherName}</b><small>{selected.listingTitle}</small></div></div>}
+
+          <div className="chat-messages">
+            {selectedMessages.length?selectedMessages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>
+              {m.body}
+              <small>{new Date(m.created_at).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"})}</small>
+            </div>):<div className="empty">Nuk ka ende mesazhe për këtë kërkesë.</div>}
+          </div>
+
+          <div className="composer">
+            <input value={body} onChange={e=>setBody(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={"Shkruaj për "+(selected?.otherName||"përdoruesin")+"…"} />
+            <button className="primary" onClick={send}>Dërgo</button>
+          </div>
+        </>
+      }
+    </div>
+  </div>;
+}
 function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void}){
   const [tab,setTab]=useState<"my"|"requests"|"wanted">("my");
   const [mine,setMine]=useState<Listing[]>([]),[incoming,setIncoming]=useState<Claim[]>([]),[wanted,setWanted]=useState<Claim[]>([]);
