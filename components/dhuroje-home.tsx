@@ -110,7 +110,8 @@ export default function DhurojeHome(){
     }else if(p==="post-choice"){
       setPostChoice(true);setShowGive(false);setShowAuth(false);
     }else if(p==="auth"){
-      setShowAuth(true);setAuthMode((pageRoute.conversation as "login"|"signup")||"login");setPostAuth(true);setPostChoice(false);
+      const authKind=pageRoute.conversation||"login";
+      setShowAuth(true);setAuthMode(authKind.endsWith("signup")?"signup":"login");setPostAuth(authKind.startsWith("post-"));setPostChoice(false);
     }else if(p==="edit"&&pageRoute.id){
       const found=listings.find(x=>x.id===pageRoute.id);
       if(found){setEditingListing(found);setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);}
@@ -126,11 +127,11 @@ export default function DhurojeHome(){
 
   async function requireAuthenticatedUser(){
     const {data,error:e}=await supabase.auth.getUser();
-    if(e||!data.user){setShowAuth(true);setAuthMode("login");return null;}
+    if(e||!data.user){setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");return null;}
     if(!user||user.id!==data.user.id)setUser(data.user);
     return data.user;
   }
-  function requireAuth(){if(!user){setShowAuth(true);setAuthMode("login");return false;}return true;}
+  function requireAuth(){if(!user){setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");return false;}return true;}
   async function auth(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
@@ -146,7 +147,7 @@ export default function DhurojeHome(){
         const ok=await finishListing(result.data.user,pendingPost);
         setPosting(false);
         setPendingPost(null);
-        if(ok){setShowAuth(false);setShowGive(false);await load();return;}
+        if(ok){setShowAuth(false);setShowGive(false);setPostAuth(false);navigatePage("home");await load();return;}
       }
     }
     setShowAuth(false);
@@ -286,9 +287,10 @@ export default function DhurojeHome(){
   }
   function choosePostAuth(mode:"login"|"signup"){
     setAuthMode(mode);setPostAuth(true);setPostChoice(false);setShowAuth(true);
-    const params=new URLSearchParams({page:"auth",mode});
-    window.history.pushState({page:"auth",mode},"",window.location.pathname+"?"+params.toString());
-    setPageRoute({page:"auth",conversation:mode});
+    const authKind="post-"+mode;
+    const params=new URLSearchParams({page:"auth",mode:authKind});
+    window.history.pushState({page:"auth",mode:authKind},"",window.location.pathname+"?"+params.toString());
+    setPageRoute({page:"auth",conversation:authKind});
   }
   function locate(){
     if(!navigator.geolocation)return setError("Ky shfletues nuk mbështet lokacionin.");
