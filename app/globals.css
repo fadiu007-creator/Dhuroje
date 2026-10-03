@@ -391,3 +391,24 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
   .conversation-list{max-height:300px}
   .chat-panel{min-height:480px}
 }
+
+.compact-messages{grid-template-columns:340px minmax(0,1fr);gap:12px}
+.compact-messages .conversation-list{padding:4px;border-radius:12px}
+.compact-messages .conversation-list h3{margin:8px;font-size:13px}
+.compact-messages .conversation-user{gap:9px;padding:10px 7px;border-bottom:1px solid #eee;border-radius:8px}
+.compact-messages .conversation-avatar{width:38px;height:38px;font-size:14px}
+.compact-messages .conversation-user-text b{font-size:13px}
+.compact-messages .conversation-user-text small{font-size:11px;line-height:1.25}
+.compact-messages .conversation-user-text .conversation-product{font-weight:750;color:#26342d;margin-top:1px}
+.compact-messages .conversation-time{font-size:9px}
+.compact-messages .chat-panel{padding:10px;border-radius:12px}
+.compact-messages .message-person{padding:4px 3px 9px!important;margin-bottom:8px!important;border-bottom:1px solid #eee}
+.compact-messages .chat-messages{min-height:300px;padding:4px}
+.compact-messages .composer{gap:6px;padding-top:8px}
+.compact-messages .composer input{min-height:40px}
+.compact-messages .composer button{padding:9px 14px}
+@media(max-width:720px){
+ .compact-messages{grid-template-columns:1fr}
+ .compact-messages .conversation-list{max-height:250px}
+ .compact-messages .chat-panel{min-height:430px}
+}
