@@ -574,16 +574,16 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
   const [messages,setMessages]=useState<any[]>([]);
   const [selectedConversation,setSelectedConversation]=useState<string>(initialConversationId||"");
   const [body,setBody]=useState("");
-  const [loading,setLoading]=useState(true);
+  const [loading,setLoading]=useState(true),[sending,setSending]=useState(false),[error,setError]=useState("");
 
   async function load(){
     if(!user)return;
-    setLoading(true);
+    setLoading(true);setError("");
     const {data:members,error:memberError}=await supabase
       .from("dhuroje_conversation_members")
       .select("conversation_id")
       .eq("user_id",user.id);
-    if(memberError){setLoading(false);return;}
+    if(memberError){setError("Nuk mund të ngarkoheshin bisedat. Provo përsëri.");setLoading(false);return;}
 
     const ids=(members||[]).map((x:any)=>x.conversation_id);
     if(!ids.length){
@@ -671,17 +671,22 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
 
   async function send(){
     const text=body.trim();
-    if(!selectedConversation||!text)return;
-    const {error}=await supabase.from("dhuroje_messages").insert({
+    if(!selectedConversation||!text||sending)return;
+    if(text.length>2000){setError("Mesazhi mund të ketë maksimum 2000 karaktere.");return;}
+    setSending(true);setError("");
+    const {error:e}=await supabase.from("dhuroje_messages").insert({
       conversation_id:selectedConversation,
       sender_id:user.id,
       body:text
     });
-    if(error)alert(error.message);
-    else{
-      setBody("");
-      await load();
-    }
+    if(e)setError("Mesazhi nuk u dërgua. Provo përsëri.");
+    else{setBody("");await load();}
+    setSending(false);
+  }
+  function formatMessageDate(value:string){
+    const d=new Date(value),now=new Date();
+    const sameDay=d.toDateString()===now.toDateString();
+    return sameDay?d.toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("sq-AL",{day:"2-digit",month:"2-digit"});
   }
 
   return <div className="page-content messages-page">
@@ -694,11 +699,16 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
       <button className="close account-close" onClick={onClose} aria-label="Mbyll">×</button>
     </div>
 
+    {error&&<div className="message-error" role="alert">{error}</div>}
     {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
-      <div className="empty">Nuk ke ende mesazhe.</div>:
+      <div className="messages-empty">
+        <div className="messages-empty-icon">💬</div>
+        <h3>Nuk ke ende biseda</h3>
+        <p>Kur të kontaktosh dikë për një dhuratë, bisedat e tua do të shfaqen këtu.</p>
+      </div>:
       <div className="messages-layout compact-messages">
         <div className="conversation-list">
-          <h3>Bisedat</h3>
+          <div className="conversation-list-head"><h3>Bisedat</h3><span>{conversations.length}</span></div>
           {conversations.map(c=>{
             const active=c.id===selectedConversation;
             return <button key={c.id} className={"conversation-user"+(active?" active":"")} onClick={()=>setSelectedConversation(c.id)}>
@@ -707,13 +717,13 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
                 <b>{c.otherName}</b>
                 <small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Mesazh"}</small>
               </span>
-              <span className="conversation-time">{c.lastMessage?.created_at?new Date(c.lastMessage.created_at).toLocaleDateString("sq-AL",{day:"2-digit",month:"2-digit"}):""}</span>
+              <span className="conversation-time">{c.lastMessage?.created_at?formatMessageDate(c.lastMessage.created_at):""}</span>
             </button>;
           })}
         </div>
 
         {selected&&<div className="chat-panel">
-          <div className="message-person">
+          <div className="message-person"><div className="message-context"><span className="message-context-label">DHURATË</span><span>{selected.listingTitle}</span></div>
             <span className="conversation-avatar">{(selected.otherName||"P").slice(0,1).toUpperCase()}</span>
             <div><b>{selected.otherName}</b><small>{selected.listingTitle}</small></div>
           </div>
@@ -721,13 +731,13 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
           <div className="chat-messages">
             {selectedMessages.length?selectedMessages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>
               {m.body}
-              <small>{new Date(m.created_at).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"})}</small>
+              <small>{formatMessageDate(m.created_at)}</small>
             </div>):<div className="empty">Nuk ka ende mesazhe.</div>}
           </div>
 
           <div className="composer">
-            <input value={body} onChange={e=>setBody(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={"Shkruaj për "+selected.otherName+"…"} />
-            <button className="primary" onClick={send}>Dërgo</button>
+            <textarea value={body} maxLength={2000} rows={1} onChange={e=>setBody(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder={"Shkruaj një mesazh për "+selected.otherName+"…"} />
+            <div className="composer-actions"><small>{body.length}/2000 · Enter për dërgim</small><button className="primary" disabled={sending||!body.trim()} onClick={send}>{sending?"Dërgohet…":"Dërgo"}</button></div>
           </div>
         </div>}
       </div>
