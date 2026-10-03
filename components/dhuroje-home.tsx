@@ -297,36 +297,60 @@ export default function DhurojeHome(){
     if(!currentUser)return;
     let otherUserId=targetUserId;
     if(listing.owner_id!==currentUser.id){
-      // Messaging is intentionally available before a request is made.
-      // The listing owner is the conversation partner; requesting is a separate action.
       otherUserId=listing.owner_id;
     } else if(!otherUserId){
       setError("Për të kontaktuar një kërkues, hape kërkesën te Paneli im dhe zgjidh Mesazho.");
+      setShowMessages(true);
+      navigatePage("messages");
       return;
     }
-    if(otherUserId===currentUser.id){setError("Nuk mund të hapësh bisedë me veten.");return;}
+    if(otherUserId===currentUser.id){
+      setError("Nuk mund të hapësh bisedë me veten.");
+      setShowMessages(true);
+      navigatePage("messages");
+      return;
+    }
     const existingMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",currentUser.id);
-    if(existingMember.error){setError(existingMember.error.message);return;}
+    if(existingMember.error){
+      setError("Nuk mund të kontrollohen bisedat. Provo përsëri.");
+      setShowMessages(true);navigatePage("messages");return;
+    }
     let cid:string|undefined;
     const memberIds=(existingMember.data||[]).map((x:any)=>x.conversation_id);
     if(memberIds.length){
       const targetMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").in("conversation_id",memberIds).eq("user_id",otherUserId);
-      if(targetMember.error){setError(targetMember.error.message);return;}
+      if(targetMember.error){
+        setError("Nuk mund të hapet biseda. Provo përsëri.");
+        setShowMessages(true);navigatePage("messages");return;
+      }
       const pairIds=(targetMember.data||[]).map((x:any)=>x.conversation_id);
       if(pairIds.length){
         const existingConversation=await supabase.from("dhuroje_conversations").select("id").in("id",pairIds).eq("listing_id",listing.id).limit(1).maybeSingle();
-        if(existingConversation.error){setError(existingConversation.error.message);return;}
+        if(existingConversation.error){
+          setError("Nuk mund të kontrollohet biseda. Provo përsëri.");
+          setShowMessages(true);navigatePage("messages");return;
+        }
         cid=existingConversation.data?.id;
       }
     }
     if(!cid){
       cid=crypto.randomUUID();
       const {error:e}=await supabase.from("dhuroje_conversations").insert({id:cid,listing_id:listing.id});
-      if(e){setError(e.message||"Nuk u krijua biseda.");return;}
-      const members=[{conversation_id:cid,user_id:currentUser.id},{conversation_id:cid,user_id:otherUserId}];
-      const {error:me}=await supabase.from("dhuroje_conversation_members").insert(members);
-      if(me){setError(me.message);return;}
+      if(e){
+        setError("Biseda nuk u krijua. Provo përsëri.");
+        setShowMessages(true);navigatePage("messages");return;
+      }
+      const {error:me}=await supabase.from("dhuroje_conversation_members").insert([
+        {conversation_id:cid,user_id:currentUser.id},
+        {conversation_id:cid,user_id:otherUserId}
+      ]);
+      if(me){
+        await supabase.from("dhuroje_conversations").delete().eq("id",cid);
+        setError("Biseda nuk u krijua. Provo përsëri.");
+        setShowMessages(true);navigatePage("messages");return;
+      }
     }
+    setError("");
     setMessageConversationId(cid);
     setShowMessages(true);
     navigatePage("messages",undefined,cid);
@@ -398,7 +422,7 @@ export default function DhurojeHome(){
     {editingListing&&<div className="page-screen"><EditListingModal listing={editingListing} onClose={()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();}} onSaved={async()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();await load();}}/></div>}
     {postChoice&&<div className="page-screen"><div className="page-content"><div className="modal auth-choice"><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Si dëshiron të vazhdosh?</h2></div><button type="button" className="close" onClick={()=>setPostChoice(false)}>×</button></div><p className="form-help">Për të dhuruar një gjë, zgjidh nëse ke llogari apo po poston për herë të parë.</p><button className="primary full" onClick={()=>choosePostAuth("login")}>Kam llogari · Hyr</button><button className="secondary full" onClick={()=>choosePostAuth("signup")}>Jam i ri · Krijo llogari</button></div></div></div>}
     {showAuth&&<div className="page-screen"><div className="page-content"><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>{postAuth?(authMode==="login"?"Hyr për të dhuruar":"Krijo llogari për të dhuruar"):(pendingPost?"Krijo llogari":"Krijo llogari")}</h2></div><button type="button" className="close" onClick={goHome}>×</button></div>{postAuth&&<p className="form-help">{authMode==="login"?"Hyr me llogarinë tënde dhe pastaj plotëso postimin.":"Krijo llogarinë tënde një herë dhe pastaj plotëso postimin."}</p>}{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Krijo llogari"}</button>{!pendingPost&&!postAuth&&<button type="button" className="secondary full" onClick={()=>{const next=authMode==="login"?"signup":"login";setAuthMode(next);const mode=postAuth?"post-"+next:next;navigatePage("auth",undefined,mode)}}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}{postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Jam i ri · Krijo llogari":"Kam llogari · Hyr"}</button>}</form></div></div>}
-    {showMessages&&<div className="page-screen"><Messages user={user} initialConversationId={messageConversationId} onClose={goHome}/></div>}
+    {showMessages&&<div className="page-screen"><Messages user={user} initialConversationId={messageConversationId} initialError={error} onClose={goHome}/></div>}
     {showNotifications&&<div className="page-screen"><Notifications user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
@@ -567,7 +591,7 @@ function ReviewModal({user,targetId,listingId,listingTitle,onClose,onSaved}:{use
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal review-modal" onSubmit={save}><div className="modal-head"><div><p className="eyebrow">PAS MARRJES</p><h2>Vlerëso dhurojën</h2><small>{listingTitle}</small></div><button type="button" className="close" onClick={onClose}>×</button></div><div className="rating-picker">{[1,2,3,4,5].map(n=><button type="button" key={n} className={n<=rating?"selected":""} onClick={()=>setRating(n)}>★</button>)}</div><label>Komenti<textarea value={comment} onChange={e=>setComment(e.target.value)} maxLength={500} placeholder="Si ishte përvoja?"/></label><button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Publiko vlerësimin"}</button></form></div>;
 }
 
-function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>void;initialConversationId?:string}){
+function Messages({user,onClose,initialConversationId,initialError}:{user:any;onClose:()=>void;initialConversationId?:string;initialError?:string}){
   const [conversations,setConversations]=useState<any[]>([]);
   const [messages,setMessages]=useState<any[]>([]);
   const [selectedConversation,setSelectedConversation]=useState<string>(initialConversationId||"");
@@ -624,6 +648,7 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
   }
 
   useEffect(()=>{load();},[user,initialConversationId]);
+  useEffect(()=>{if(initialError)setError(initialError);},[initialError]);
   useEffect(()=>{
     if(!user)return;
     const ch=supabase.channel("messages-ui-"+user.id)
