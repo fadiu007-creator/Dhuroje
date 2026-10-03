@@ -661,6 +661,36 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;
     setBusy(false);
   }
 
+  async function setListing(id:string,status:string){
+    setBusy(true);
+    const {error}=await supabase.from("dhuroje_listings").update({status}).eq("id",id).eq("owner_id",user.id);
+    if(error)alert(error.message);else{await load();onChanged();}
+    setBusy(false);
+  }
+  async function deleteListing(listing:Listing){
+    if(!window.confirm("Ta fshijmë këtë shpallje?"))return;
+    setBusy(true);
+    const {error}=await supabase.rpc("dhuroje_delete_listing",{p_listing_id:listing.id});
+    if(error)alert(error.message);else{await load();onChanged();}
+    setBusy(false);
+  }
+  async function schedulePickup(c:Claim){
+    const form=document.getElementById("pickup-form") as HTMLFormElement|null;
+    if(!form)return;
+    const f=new FormData(form);
+    setBusy(true);
+    const existing=pickupFor(c.id);
+    const payload={claim_id:c.id,listing_id:c.listing_id,owner_id:user.id,claimant_id:c.claimant_id,scheduled_at:f.get("scheduled_at")?new Date(String(f.get("scheduled_at"))).toISOString():null,location:String(f.get("location")||""),notes:String(f.get("notes")||""),status:"proposed"};
+    const result=existing?await supabase.from("dhuroje_pickups").update(payload).eq("id",existing.id):await supabase.from("dhuroje_pickups").insert(payload);
+    if(result.error)alert(result.error.message);else{setScheduleFor(null);await load();onChanged();}
+    setBusy(false);
+  }
+  async function updatePickup(p:any,status:string){
+    setBusy(true);
+    const {error}=await supabase.from("dhuroje_pickups").update({status,updated_at:new Date().toISOString()}).eq("id",p.id);
+    if(error)alert(error.message);else{await load();onChanged();}
+    setBusy(false);
+  }
   const pickupFor=(claimId:string)=>pickups.find(p=>p.claim_id===claimId);
 
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
