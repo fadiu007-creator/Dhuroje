@@ -661,31 +661,108 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
     </div>
   </div>;
 }
-function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested,profile}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void}){
-  const [section,setSection]=useState<"overview"|"listings"|"requested">("overview");
+function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested,profile}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void;profile:any}){
+  const initialSection=new URLSearchParams(typeof window!=="undefined"?window.location.search:"").get("section")||"overview";
+  const [section,setSection]=useState<"overview"|"listings"|"requested">(
+    initialSection==="listings"||initialSection==="requested"?initialSection:"overview"
+  );
   const [mine,setMine]=useState<Listing[]>([]),[wanted,setWanted]=useState<Claim[]>([]),[busy,setBusy]=useState(false);
-  async function load(){if(!user)return;const [{data:ls},{data:myClaims}]=await Promise.all([
-    supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("owner_id",user.id).order("created_at",{ascending:false}),
-    supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url))").eq("claimant_id",user.id).order("created_at",{ascending:false})
-  ]);setMine((ls||[]) as Listing[]);setWanted((myClaims||[]).filter((x:any)=>x.status!=="cancelled") as any[]);}
+
+  async function load(){
+    if(!user)return;
+    const [{data:ls},{data:myClaims}]=await Promise.all([
+      supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("owner_id",user.id).order("created_at",{ascending:false}),
+      supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url))").eq("claimant_id",user.id).order("created_at",{ascending:false})
+    ]);
+    setMine((ls||[]) as Listing[]);
+    setWanted((myClaims||[]).filter((x:any)=>x.status!=="cancelled") as any[]);
+  }
   useEffect(()=>{load();},[user]);
-  const activeMine=mine.filter(x=>["available","reserved"].includes(x.status)),requestedCount=wanted.filter((x:any)=>["pending","accepted"].includes(x.status)).length;
-  async function deleteLocal(listing:Listing){if(!window.confirm("Ta fshij përgjithmonë këtë shpallje?"))return;setBusy(true);const {error}=await supabase.rpc("dhuroje_delete_listing",{p_listing_id:listing.id});if(error)alert(error.message);else{await load();onChanged();}setBusy(false);}
-  return <div className="modal-backdrop dashboard-page-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
-    <div className="modal dashboard personal-dashboard">
-      <div className="modal-head"><div><p className="eyebrow">LLOGARIA IME</p><h2>Profili im</h2><small>{user.email}</small></div><button className="close" onClick={onClose}>×</button></div>
-      <div className="account-header"><div className="account-avatar">●</div><div><h3>{profile?.display_name||user.email?.split("@")[0]||"Përdorues"}</h3><p>📍 {profile?.city||"Qyteti nuk është vendosur"}{profile?.age!=null&&<> · 🎂 {profile.age} vjeç</>}</p></div><button className="secondary" onClick={onProfile}>✏️ Personalizo profilin</button></div>
-      <div className="account-menu">
-        <button className="account-menu-item active" onClick={()=>setSection("overview")}><span>👤</span><b>Informacioni personal</b><small>Emri, qyteti, mosha dhe vlerësimet</small></button>
-        <button className="account-menu-item" onClick={onMessages}><span>💬</span><b>Mesazhet</b><small>Bisedat me dhurues dhe kërkues</small></button>
-        <button className={section==="listings"?"account-menu-item active":"account-menu-item"} onClick={()=>setSection("listings")}><span>🎁</span><b>Shpalljet e mia</b><small>{activeMine.length} aktive · {mine.filter(x=>x.status==="collected").length} të dhuruara</small></button>
-        <button className="account-menu-item" onClick={onSaved}><span>♥</span><b>Të ruajturat / të pëlqyerat</b><small>Gjërat që ke ruajtur</small></button>
-        <button className={section==="requested"?"account-menu-item active":"account-menu-item"} onClick={()=>setSection("requested")}><span>🙋</span><b>Dhuratat e kërkuara</b><small>{requestedCount} kërkesa aktive</small></button>
+
+  function goSection(next:"overview"|"listings"|"requested"){
+    setSection(next);
+    const p=new URLSearchParams(window.location.search);
+    p.set("page","dashboard");
+    if(next==="overview")p.delete("section");else p.set("section",next);
+    window.history.pushState({page:"dashboard",section:next},"",window.location.pathname+"?"+p.toString());
+  }
+
+  const activeMine=mine.filter(x=>["available","reserved"].includes(x.status));
+  const givenCount=mine.filter(x=>x.status==="collected").length;
+  const requestedCount=wanted.filter((x:any)=>["pending","accepted"].includes(x.status)).length;
+
+  async function deleteLocal(listing:Listing){
+    if(!window.confirm("Ta fshij përgjithmonë këtë shpallje?"))return;
+    setBusy(true);
+    const {error}=await supabase.rpc("dhuroje_delete_listing",{p_listing_id:listing.id});
+    if(error)alert(error.message);else{await load();onChanged();}
+    setBusy(false);
+  }
+
+  return <div className="page-content account-page">
+    <div className="account-page-top">
+      <div>
+        <p className="eyebrow">LLOGARIA IME</p>
+        <h1>Profili im</h1>
+        <p className="account-email">{user.email}</p>
       </div>
-      {section==="overview"&&<div className="account-overview"><div className="profile-stats"><div><b>{activeMine.length}</b><small>aktive</small></div><div><b>{mine.filter(x=>x.status==="collected").length}</b><small>të dhuruara</small></div><div><b>{requestedCount}</b><small>të kërkuara</small></div></div><div className="account-info-card"><h3>Informacioni personal</h3><div><span>👤 Emri</span><b>{profile?.display_name||"—"}</b></div><div><span>📍 Qyteti</span><b>{profile?.city||"—"}</b></div><div><span>🎂 Mosha</span><b>{profile?.age!=null?profile.age+" vjeç":"—"}</b></div><div><span>📅 Anëtar që nga</span><b>{new Date(profile?.created_at||user.created_at).toLocaleDateString("sq-AL")}</b></div><button className="secondary full" onClick={onProfile}>Ndrysho informacionin</button></div></div>}
-      {section==="listings"&&<div className="dash-list">{activeMine.length?activeMine.map(x=><div className="dash-row" key={x.id} onClick={()=>onListing(x)}><span className="dash-icon">{emoji(x.category)}</span><div><b>{x.title}</b><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"} · {x.location_name||"Pa lokacion"}</small></div><button disabled={busy} onClick={e=>{e.stopPropagation();onEdit(x)}}>✏️</button><button disabled={busy} onClick={e=>{e.stopPropagation();onMarkGiven(x)}}>✓</button><button disabled={busy} className="danger" onClick={e=>{e.stopPropagation();deleteLocal(x)}}>🗑️</button></div>):<div className="empty">Nuk ke shpallje aktive.</div>}</div>}
-      {section==="requested"&&<div className="dash-list">{wanted.length?wanted.map((x:any)=><div className="dash-row" key={x.id} onClick={()=>x.listing&&onListing(x.listing)}><span className="dash-icon">{emoji(x.listing?.category||"other")}</span><div><b>{x.listing?.title||"Dhuratë"}</b><small>{x.status==="pending"?"Në pritje":x.status==="accepted"?"Pranuar":x.status} · {x.listing?.location_name||""}</small></div>{x.status==="pending"&&<button disabled={busy} className="danger" onClick={async e=>{e.stopPropagation();setBusy(true);const r=await supabase.from("dhuroje_claims").update({status:"cancelled"}).eq("id",x.id).eq("claimant_id",user.id).eq("status","pending");if(r.error)alert(r.error.message);await load();setBusy(false);}}>↩ Tërhiq</button>}{x.status==="accepted"&&x.listing&&<button onClick={e=>{e.stopPropagation();onChat(x.listing,x.listing.owner_id)}}>💬 Mesazho</button>}</div>):<div className="empty">Nuk ke kërkuar ende ndonjë dhuratë.</div>}</div>}
+      <button className="close account-close" onClick={onClose} aria-label="Mbyll">×</button>
     </div>
+
+    <div className="account-hero">
+      <div className="account-avatar">{(profile?.display_name||user.email||"P").slice(0,1).toUpperCase()}</div>
+      <div className="account-hero-main">
+        <h2>{profile?.display_name||user.email?.split("@")[0]||"Përdorues"}</h2>
+        <p>📍 {profile?.city||"Qyteti nuk është vendosur"}{profile?.age!=null&&<> · 🎂 {profile.age} vjeç</>}</p>
+      </div>
+      <button className="secondary" onClick={onProfile}>✏️ Ndrysho profilin</button>
+    </div>
+
+    <div className="account-stats">
+      <button onClick={()=>goSection("listings")}><b>{activeMine.length}</b><span>Shpallje aktive</span></button>
+      <button onClick={()=>goSection("listings")}><b>{givenCount}</b><span>Të dhuruara</span></button>
+      <button onClick={()=>goSection("requested")}><b>{requestedCount}</b><span>Të kërkuara</span></button>
+    </div>
+
+    <nav className="account-sections" aria-label="Llogaria">
+      <button className={section==="overview"?"active":""} onClick={()=>goSection("overview")}>👤 Informacioni personal</button>
+      <button onClick={onMessages}>💬 Mesazhet</button>
+      <button className={section==="listings"?"active":""} onClick={()=>goSection("listings")}>🎁 Shpalljet e mia <span>{activeMine.length}</span></button>
+      <button onClick={onSaved}>♥ Të ruajturat / të pëlqyerat</button>
+      <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Dhuratat e kërkuara <span>{requestedCount}</span></button>
+    </nav>
+
+    {section==="overview"&&<section className="account-section">
+      <div className="account-section-head"><div><p className="eyebrow">PERSONALE</p><h2>Informacioni personal</h2><p>Detajet që shfaqen në profilin tënd te Dhuroje.</p></div><button className="secondary" onClick={onProfile}>Ndrysho</button></div>
+      <div className="personal-details">
+        <div><span>👤 Emri</span><b>{profile?.display_name||"—"}</b></div>
+        <div><span>📍 Qyteti</span><b>{profile?.city||"—"}</b></div>
+        <div><span>🎂 Mosha</span><b>{profile?.age!=null?profile.age+" vjeç":"—"}</b></div>
+        <div><span>✉️ Email</span><b>{user.email||"—"}</b></div>
+        <div><span>📅 Anëtar që nga</span><b>{new Date(profile?.created_at||user.created_at).toLocaleDateString("sq-AL")}</b></div>
+      </div>
+    </section>}
+
+    {section==="listings"&&<section className="account-section">
+      <div className="account-section-head"><div><p className="eyebrow">DHURATAT E MIA</p><h2>Shpalljet e mia</h2><p>Menaxho dhuratat aktive dhe ato që i ke dhënë.</p></div></div>
+      <div className="dash-list">{activeMine.length?activeMine.map(x=><div className="dash-row account-list-row" key={x.id} onClick={()=>onListing(x)}>
+        <span className="dash-icon">{emoji(x.category)}</span>
+        <div><b>{x.title}</b><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"} · {x.location_name||"Pa lokacion"}</small></div>
+        <button disabled={busy} onClick={e=>{e.stopPropagation();onEdit(x)}}>✏️</button>
+        <button disabled={busy} onClick={e=>{e.stopPropagation();onMarkGiven(x)}}>✓</button>
+        <button disabled={busy} className="danger" onClick={e=>{e.stopPropagation();deleteLocal(x)}}>🗑️</button>
+      </div>):<div className="empty">Nuk ke shpallje aktive.</div>}</div>
+    </section>}
+
+    {section==="requested"&&<section className="account-section">
+      <div className="account-section-head"><div><p className="eyebrow">KËRKESAT E MIA</p><h2>Dhuratat e kërkuara</h2><p>Këtu i sheh kërkesat që ke dërguar për dhurata.</p></div></div>
+      <div className="dash-list">{wanted.length?wanted.map((x:any)=><div className="dash-row account-list-row" key={x.id} onClick={()=>x.listing&&onListing(x.listing)}>
+        <span className="dash-icon">{emoji(x.listing?.category||"other")}</span>
+        <div><b>{x.listing?.title||"Dhuratë"}</b><small>{x.status==="pending"?"Në pritje":x.status==="accepted"?"Pranuar":x.status} · {x.listing?.location_name||""}</small></div>
+        {x.status==="pending"&&<button disabled={busy} className="danger" onClick={async e=>{e.stopPropagation();setBusy(true);const r=await supabase.from("dhuroje_claims").update({status:"cancelled"}).eq("id",x.id).eq("claimant_id",user.id).eq("status","pending");if(r.error)alert(r.error.message);await load();setBusy(false);}}>↩ Tërhiq</button>}
+        {x.status==="accepted"&&x.listing&&<button onClick={e=>{e.stopPropagation();onChat(x.listing,x.listing.owner_id)}}>💬 Mesazho</button>}
+      </div>):<div className="empty">Nuk ke kërkuar ende ndonjë dhuratë.</div>}</div>
+    </section>}
   </div>;
 }
 function PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onClose:()=>void;onChat?:()=>void;onListing?:(listing:Listing,image?:string)=>void}){
