@@ -443,7 +443,7 @@ function SavedListings({userId,favorites,onRemove,onListing,onExplore}:{userId:s
       </article>)}</section>}
   </div>;
 }
-\nfunction PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onClose:()=>void;onChat?:()=>void;onListing?:(listing:Listing,image?:string)=>void}){
+function PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onClose:()=>void;onChat?:()=>void;onListing?:(listing:Listing,image?:string)=>void}){
   const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[posts,setPosts]=useState<Listing[]>([]),[postImages,setPostImages]=useState<Record<string,string>>({});
   useEffect(()=>{(async()=>{const [p,r,l]=await Promise.all([
     supabase.from("dhuroje_profiles").select("*").eq("id",userId).maybeSingle(),
