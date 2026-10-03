@@ -17,6 +17,34 @@ const cities=["Prishtinë","Prizren","Pejë","Ferizaj","Gjilan","Gjakovë","Mitr
 const categoryDb:Record<string,string>={Ushqim:"food",Veshmbathje:"clothing",Shtëpi:"home",Elektronikë:"electronics",Fëmijë:"kids",Libra:"books","Të tjera":"other"};
 const categoryLabel:Record<string,string>={food:"Ushqim",clothing:"Veshmbathje",home:"Shtëpi",electronics:"Elektronikë",kids:"Fëmijë",books:"Libra",other:"Të tjera"};
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
+
+async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promise<File|null>{
+  if(!file.type.startsWith("image/"))return null;
+  if(file.size>15*1024*1024)throw new Error("Fotoja origjinale duhet të jetë maksimumi 15 MB.");
+  const bitmap=await createImageBitmap(file);
+  const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
+  const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
+  const canvas=document.createElement("canvas");
+  canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext("2d");
+  if(!ctx){bitmap.close();throw new Error("Nuk mund të përpunohej fotoja.");}
+  ctx.drawImage(bitmap,0,0,width,height);
+  bitmap.close();
+  const makeBlob=(type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
+  let blob:Blob|null=null;
+  for(const quality of [0.82,0.74,0.66,0.58,0.50,0.42]){
+    blob=await makeBlob("image/webp",quality);
+    if(blob&&blob.size<=maxBytes)break;
+  }
+  if(!blob||blob.size>maxBytes){
+    for(const quality of [0.75,0.65,0.55]){
+      blob=await makeBlob("image/jpeg",quality);
+      if(blob&&blob.size<=maxBytes)break;
+    }
+  }
+  if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej nën 500 KB.");
+  return new File([blob],"photo.webp",{type:"image/webp",lastModified:Date.now()});
+}
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -400,7 +428,7 @@ export default function DhurojeHome(){
 
     {showGive&&<div className="route-shell"><div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&goHome()}><form className="modal" onSubmit={createListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0);if(files.length){const next=[...selectedPhotoFiles,...files].slice(0,6);setPhotoError(false);setError("");setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));e.currentTarget.value="";}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Shto minimum 1 foto , maksimum 6 foto.</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={async e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){try{setPhotoError(false);setError("");const compressed:File[]=[];for(const file of files){const result=await compressImage(file,1200,500*1024);if(result)compressed.push(result);}const next=[...selectedPhotoFiles,...compressed].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!compressed.length)throw new Error("Nuk u zgjodh asnjë foto e vlefshme.");}catch(err:any){setPhotoError(true);setError(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto. Kompresohen automatikisht në WebP, deri në 500 KB secila.</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
 <button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
@@ -532,7 +560,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     <label>Qyteti<select name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
     {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
-    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={e=>setNewFiles(Array.from(e.target.files||[]).slice(0,6))}/></label></div>
+    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={async e=>{try{const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);const compressed:File[]=[];for(const file of files){const result=await compressImage(file,1200,500*1024);if(result)compressed.push(result);}setNewFiles(compressed);if(files.length&&!compressed.length)setError("Nuk u zgjodh asnjë foto e vlefshme.");}catch(err:any){setError(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}/></label></div>
     <button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj ndryshimet"}</button>
   </form></div>;
 }
@@ -580,11 +608,10 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
     if(parsedAge!==null&&(!Number.isInteger(parsedAge)||parsedAge<13||parsedAge>120)){alert("Mosha duhet të jetë 13–120.");setSaving(false);return;}
     let avatar_url=profile?.avatar_url||null;
     if(avatarFile){
-      if(avatarFile.size>5*1024*1024){alert("Fotoja duhet të jetë maksimumi 5 MB.");setSaving(false);return;}
       if(!avatarFile.type.startsWith("image/")){alert("Zgjidh një foto.");setSaving(false);return;}
-      const ext=avatarFile.name.split(".").pop()?.toLowerCase()||"jpg";
-      const path=user.id+"/"+crypto.randomUUID()+"."+ext;
-      const up=await supabase.storage.from("dhuroje-avatars").upload(path,avatarFile,{contentType:avatarFile.type,upsert:false});
+      if(avatarFile.size>500*1024){alert("Fotoja e kompresuar duhet të jetë maksimumi 500 KB.");setSaving(false);return;}
+      const path=user.id+"/"+crypto.randomUUID()+".webp";
+      const up=await supabase.storage.from("dhuroje-avatars").upload(path,avatarFile,{contentType:"image/webp",upsert:false});
       if(up.error){alert(up.error.message);setSaving(false);return;}
       avatar_url=supabase.storage.from("dhuroje-avatars").getPublicUrl(path).data.publicUrl;
     }
@@ -598,7 +625,7 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
       <form className="profile-form" onSubmit={save}>
         <div className="profile-photo-editor">
           <div className="profile-photo-preview">{avatarPreview?<img src={avatarPreview} alt="Foto e profilit" />:<span>{(name||user.email||"P").slice(0,1).toUpperCase()}</span>}</div>
-          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*" onChange={e=>{const file=e.target.files?.[0]||null;setAvatarFile(file);if(file)setAvatarPreview(URL.createObjectURL(file));}}/></label><small className="form-help">Foto e profilit · opsionale · max 5 MB</small></div>
+          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*" onChange={async e=>{const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressImage(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale · kompresohet automatikisht, max 500 KB</small></div>
         </div>
         <label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
         <label>Qyteti<input value={city} onChange={e=>setCity(e.target.value)} maxLength={80} placeholder="p.sh. Ferizaj"/></label>
