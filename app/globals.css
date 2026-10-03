@@ -479,3 +479,18 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
   .chat-person-info span{max-width:145px}
   .message-row .bubble{max-width:82%}
 }
+
+/* Persistent app chrome on every routed page */
+.topbar{position:sticky!important;top:0!important;z-index:1101!important}
+.bottom-nav{z-index:1101!important}
+.page-screen{padding-top:76px!important;padding-bottom:70px!important}
+.route-shell{padding-top:76px!important;padding-bottom:70px!important}
+.page-screen>.page-content{min-height:calc(100dvh - 146px)!important;padding-bottom:28px!important}
+.route-shell>.modal-backdrop{min-height:calc(100dvh - 146px)!important}
+@media(max-width:560px){
+  .topbar{height:60px!important}
+  .page-screen{padding-top:60px!important;padding-bottom:64px!important}
+  .route-shell{padding-top:60px!important;padding-bottom:64px!important}
+  .page-screen>.page-content{min-height:calc(100dvh - 124px)!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:20px!important}
+  .route-shell>.modal-backdrop{min-height:calc(100dvh - 124px)!important}
+}
