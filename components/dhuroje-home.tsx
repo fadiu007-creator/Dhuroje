@@ -573,7 +573,7 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
   const [selectedConversation,setSelectedConversation]=useState<string>(initialConversationId||"");
   const [body,setBody]=useState("");
   const [loading,setLoading]=useState(true),[sending,setSending]=useState(false),[error,setError]=useState("");
-  const [mobileChat,setMobileChat]=useState(false);
+  const [mobileChat,setMobileChat]=useState(false),[conversationSearch,setConversationSearch]=useState("");
 
   async function load(){
     if(!user)return;
@@ -630,6 +630,11 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
 
   const selectedMessages=messages.filter(m=>m.conversation_id===selectedConversation);
   const selected=conversations.find(c=>c.id===selectedConversation);
+  const visibleConversations=conversations.filter(c=>{
+    const q=conversationSearch.trim().toLowerCase();
+    if(!q)return true;
+    return (c.otherName+" "+c.listingTitle+" "+(c.lastMessage?.body||"")).toLowerCase().includes(q);
+  });
 
   async function send(){
     const text=body.trim();
@@ -661,13 +666,21 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
       </div>:
       <div className={"messages-workspace"+(mobileChat?" mobile-chat-open":"")}>
         <aside className="conversation-list">
-          <div className="conversation-list-head"><div><b>Bisedat</b><small>{conversations.length} {conversations.length===1?"bisedë":"biseda"}</small></div></div>
+          <div className="conversation-list-head">
+            <div className="conversation-head-title"><b>Bisedat</b><small>{conversations.length} {conversations.length===1?"bisedë":"biseda"}</small></div>
+            <span className="conversation-count">{conversations.length}</span>
+          </div>
+          <div className="conversation-search">
+            <span>⌕</span>
+            <input value={conversationSearch} onChange={e=>setConversationSearch(e.target.value)} placeholder="Kërko bisedë..." aria-label="Kërko bisedë"/>
+            {conversationSearch&&<button type="button" onClick={()=>setConversationSearch("")} aria-label="Pastro kërkimin">×</button>}
+          </div>
           <div className="conversation-items">
-            {conversations.map(c=><button key={c.id} className={"conversation-user"+(c.id===selectedConversation?" active":"")} onClick={()=>selectConversation(c.id)}>
+            {visibleConversations.length?visibleConversations.map(c=><button key={c.id} className={"conversation-user"+(c.id===selectedConversation?" active":"")} onClick={()=>selectConversation(c.id)}>
               <span className="conversation-avatar">{c.avatar?<img src={c.avatar} alt=""/>:initials(c.otherName)}</span>
               <span className="conversation-user-text"><b>{c.otherName}</b><small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Bisedë e re"}</small></span>
               <span className="conversation-time">{time(c.lastMessage.created_at)}</span>
-            </button>)}
+            </button>):<div className="conversation-no-results"><span>⌕</span><b>Nuk u gjet asnjë bisedë</b><small>Provo emrin e përdoruesit ose dhuratën.</small></div>}
           </div>
         </aside>
 
