@@ -40,3 +40,12 @@ body{font-size:14px!important}
 .filter-drawer .filter-check input{width:16px;height:16px}
 .route-shell .form-help{display:block;margin-top:4px}
 @media(max-width:620px){.search-filters,.filter-drawer{margin-left:12px;margin-right:12px}.filter-drawer{display:grid;grid-template-columns:1fr}.filter-drawer select{width:100%}}
+/* Search filters */
+.market-filter-bar{max-width:1240px;margin:12px auto 0;display:flex;gap:8px;align-items:center}
+.market-filter-bar .filter-button{border:1px solid #d7dcda;background:#fff;border-radius:7px;padding:9px 13px;color:#333;font-size:12px;cursor:pointer}
+.market-filter-bar .filter-button:hover{border-color:#aeb8b4;background:#f7f9f8}
+.filter-count{color:var(--v-green);font-size:12px;margin-left:5px}
+.search-filters{max-width:1240px;margin:8px auto 4px;padding:14px;background:#fafbfb;border:1px solid var(--v-line);border-radius:8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.search-filters label{font-size:11px;font-weight:700;color:#505956}.search-filters select{display:block;width:100%;margin-top:5px;height:40px;border:1px solid #d7dcda;border-radius:6px;background:#fff;padding:0 10px;color:#333}
+@media(max-width:1100px){.market-filter-bar,.search-filters{margin-left:16px;margin-right:16px}}
+@media(max-width:620px){.market-filter-bar{margin-left:12px;margin-right:12px}.search-filters{margin-left:12px;margin-right:12px;grid-template-columns:1fr}.market-filter-bar .filter-button{flex:1}}
