@@ -599,15 +599,19 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
     const lastMessageByConversation:Record<string,any>={};
     (ms||[]).forEach((m:any)=>{lastMessageByConversation[m.conversation_id]=m;});
 
-    const enriched=rows.filter((c:any)=>lastMessageByConversation[c.id]).map((c:any)=>({
+    const enriched=rows.map((c:any)=>({
       ...c,
       listing:listingMap[c.listing_id],
       listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
       otherUserId:otherByConversation[c.id],
       otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues",
       avatar:profileMap[otherByConversation[c.id]]?.avatar_url||null,
-      lastMessage:lastMessageByConversation[c.id]
-    })).sort((a:any,b:any)=>new Date(b.lastMessage.created_at).getTime()-new Date(a.lastMessage.created_at).getTime());
+      lastMessage:lastMessageByConversation[c.id]||null
+    })).sort((a:any,b:any)=>{
+      const at=a.lastMessage?.created_at||a.created_at;
+      const bt=b.lastMessage?.created_at||b.created_at;
+      return new Date(bt).getTime()-new Date(at).getTime();
+    });
 
     setConversations(enriched);setMessages(ms||[]);
     setSelectedConversation(current=>{
@@ -678,8 +682,8 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
           <div className="conversation-items">
             {visibleConversations.length?visibleConversations.map(c=><button key={c.id} className={"conversation-user"+(c.id===selectedConversation?" active":"")} onClick={()=>selectConversation(c.id)}>
               <span className="conversation-avatar">{c.avatar?<img src={c.avatar} alt=""/>:initials(c.otherName)}</span>
-              <span className="conversation-user-text"><b>{c.otherName}</b><small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Bisedë e re"}</small></span>
-              <span className="conversation-time">{time(c.lastMessage.created_at)}</span>
+              <span className="conversation-user-text"><b>{c.otherName}</b><small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Bisedë e re — nis bisedën"}</small></span>
+              <span className="conversation-time">{c.lastMessage?time(c.lastMessage.created_at):"E re"}</span>
             </button>):<div className="conversation-no-results"><span>⌕</span><b>Nuk u gjet asnjë bisedë</b><small>Provo emrin e përdoruesit ose dhuratën.</small></div>}
           </div>
         </aside>
