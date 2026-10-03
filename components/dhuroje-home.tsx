@@ -33,7 +33,7 @@ export default function DhurojeHome(){
   const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
   const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
   const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
-  const [showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
+  const [photoError,setPhotoError]=useState(false),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
   const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[foodFilter,setFoodFilter]=useState<"all"|"sealed"|"opened"|"refrigerated">("all");
@@ -196,7 +196,7 @@ export default function DhurojeHome(){
   }
   async function finishListing(postingUser:any,f:FormData){
     const files=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
-    if(!files.length){setError("Duhet të shtosh të paktën 1 foto.");return false;}
+    if(!files.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return false;}
     const {data:item,error:e1}=await supabase.from("dhuroje_listings").insert({
       owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
       category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:String(f.get("city")||listingCity||profile?.city||location),
@@ -215,7 +215,7 @@ export default function DhurojeHome(){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget);
     const selectedPhotos=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
-    if(!selectedPhotos.length){setError("Duhet të shtosh të paktën 1 foto.");return;}
+    if(!selectedPhotos.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return;}
     setPosting(true);
     if(!user){setError("Hyr ose krijo një llogari para se të publikosh.");setPosting(false);return;}
     const ok=await finishListing(user,f);
@@ -343,7 +343,7 @@ export default function DhurojeHome(){
 
     {showGive&&<div className="route-shell"><div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&goHome()}><form className="modal" onSubmit={createListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select><small className="form-help">Parazgjedhur nga qyteti i profilit. Mund ta ndryshosh për këtë shpallje.</small></label>
-      <div className="photo-picker"><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple /></label><small className="form-help">Të paktën 1 foto është e detyrueshme. Mund të shtosh deri në 6 foto.</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={e=>{if(e.target.files?.length){setPhotoError(false);setError("");}}}/></label>{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Të paktën 1 foto është e detyrueshme. Mund të shtosh deri në 6 foto.</small></div>
       <label>Përshkrimi<textarea name="description" placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
       <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting}>{posting?"Po publikohet…":user?"Publiko falas":"Krijo llogari & publiko"}</button>
