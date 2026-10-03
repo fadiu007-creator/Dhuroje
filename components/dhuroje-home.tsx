@@ -227,6 +227,7 @@ export default function DhurojeHome(){
       const {error:me}=await supabase.from("dhuroje_conversation_members").insert(members);
       if(me){setError(me.message);return;}
     }
+    setMessageConversationId(cid);
     setShowMessages(true);
   }
   function openPosting(){
@@ -287,7 +288,7 @@ export default function DhurojeHome(){
     {editingListing&&<EditListingModal listing={editingListing} onClose={()=>setEditingListing(null)} onSaved={async()=>{setEditingListing(null);await load();}}/>}
     {postChoice&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setPostChoice(false)}><div className="modal auth-choice"><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Si dëshiron të vazhdosh?</h2></div><button type="button" className="close" onClick={()=>setPostChoice(false)}>×</button></div><p className="form-help">Për të dhuruar një gjë, zgjidh nëse ke llogari apo po poston për herë të parë.</p><button className="primary full" onClick={()=>choosePostAuth("login")}>Kam llogari · Hyr</button><button className="secondary full" onClick={()=>choosePostAuth("signup")}>Jam i ri · Krijo llogari</button></div></div>}
     {showAuth&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowAuth(false)}><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">{postAuth?"DHUROJE":"DHUROJE"}</p><h2>{postAuth?(authMode==="login"?"Hyr për të dhuruar":"Krijo llogari për të dhuruar"):(pendingPost?"Krijo llogari":"Krijo llogari")}</h2></div><button type="button" className="close" onClick={()=>{setShowAuth(false);setPostAuth(false);setPendingPost(null)}}>×</button></div>{postAuth&&<p className="form-help">{authMode==="login"?"Hyr me llogarinë tënde dhe pastaj plotëso postimin.":"Krijo llogarinë tënde një herë dhe pastaj plotëso postimin."}</p>}{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Krijo llogari"}</button>{!pendingPost&&!postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}{postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Jam i ri · Krijo llogari":"Kam llogari · Hyr"}</button>}</form></div>}
-    {showMessages&&<Messages user={user} onClose={()=>setShowMessages(false)}/>} {showNotifications&&<Notifications user={user} onClose={()=>setShowNotifications(false)} onChanged={loadNotificationCount}/>} {showProfile&&<ProfileModal user={user} onClose={()=>setShowProfile(false)} onChanged={loadNotificationCount}/>} {publicProfileId&&<PublicProfileModal userId={publicProfileId} onClose={()=>setPublicProfileId(null)} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));}}/>}
+    {showMessages&&<Messages user={user} initialConversationId={messageConversationId} onClose={()=>{setShowMessages(false);setMessageConversationId("");}}/>} {showNotifications&&<Notifications user={user} onClose={()=>setShowNotifications(false)} onChanged={loadNotificationCount}/>} {showProfile&&<ProfileModal user={user} onClose={()=>setShowProfile(false)} onChanged={loadNotificationCount}/>} {publicProfileId&&<PublicProfileModal userId={publicProfileId} onClose={()=>setPublicProfileId(null)} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));}}/>}
     {showDashboard&&<Dashboard user={user} onClose={()=>setShowDashboard(false)} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven}/>} 
     <nav className="bottom-nav"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false)}}>⌂<span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(x=>!x);setMapMode(false);}}}>♡<span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add">＋</button><button onClick={()=>requireAuth()&&setShowMessages(true)}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
   </main>;
@@ -443,12 +444,13 @@ function ReviewModal({user,targetId,listingId,listingTitle,onClose,onSaved}:{use
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal review-modal" onSubmit={save}><div className="modal-head"><div><p className="eyebrow">PAS MARRJES</p><h2>Vlerëso dhurojën</h2><small>{listingTitle}</small></div><button type="button" className="close" onClick={onClose}>×</button></div><div className="rating-picker">{[1,2,3,4,5].map(n=><button type="button" key={n} className={n<=rating?"selected":""} onClick={()=>setRating(n)}>★</button>)}</div><label>Komenti<textarea value={comment} onChange={e=>setComment(e.target.value)} maxLength={500} placeholder="Si ishte përvoja?"/></label><button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Publiko vlerësimin"}</button></form></div>;
 }
 
-function Messages({user,onClose}:{user:any;onClose:()=>void}){
+function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>void;initialConversationId?:string}){
   const [conversations,setConversations]=useState<any[]>([]);
   const [messages,setMessages]=useState<any[]>([]);
   const [selectedConversation,setSelectedConversation]=useState<string>("");
   const [body,setBody]=useState("");
   const [loading,setLoading]=useState(true);
+  const [targetConversation,setTargetConversation]=useState<string>(initialConversationId||"");
 
   async function load(){
     if(!user)return;
@@ -519,9 +521,12 @@ function Messages({user,onClose}:{user:any;onClose:()=>void}){
     setMessages(ms||[]);
 
     setSelectedConversation(current=>{
+      const preferred=initialConversationId&&enriched.some(c=>c.id===initialConversationId)?initialConversationId:"";
+      if(preferred)return preferred;
       if(current&&enriched.some(c=>c.id===current))return current;
       return enriched[0]?.id||"";
     });
+    if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))setTargetConversation(initialConversationId);
     setLoading(false);
   }
 
@@ -563,12 +568,13 @@ function Messages({user,onClose}:{user:any;onClose:()=>void}){
       {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
         <div className="empty">Nuk ke ende mesazhe.</div>:
         <>
-          <label className="message-context">
+          {!targetConversation&&<label className="message-context">
             <span>Postimi / kërkesa</span>
             <select value={selectedConversation} onChange={e=>setSelectedConversation(e.target.value)}>
-              {conversations.map(c=><option key={c.id} value={c.id}>{c.listingTitle} · {c.otherName}</option>)}
+              {conversations.map(c=><option key={c.id} value={c.id}>{c.otherName} · {c.listingTitle}</option>)}
             </select>
-          </label>
+          </label>}
+          {targetConversation&&selected&&<div className="message-person"><span>👤</span><div><b>{selected.otherName}</b><small>{selected.listingTitle}</small></div></div>}
 
           <div className="chat-messages">
             {selectedMessages.length?selectedMessages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>
