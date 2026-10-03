@@ -633,23 +633,23 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
       <div>
         <p className="eyebrow">MESAZHET</p>
         <h1>Mesazhet</h1>
-        <p className="account-email">Bisedat e tua</p>
+        <p className="account-email">Personat dhe dhuratat për të cilat keni folur</p>
       </div>
       <button className="close account-close" onClick={onClose} aria-label="Mbyll">×</button>
     </div>
 
     {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
       <div className="empty">Nuk ke ende mesazhe.</div>:
-      <div className="messages-layout">
+      <div className="messages-layout compact-messages">
         <div className="conversation-list">
-          <h3>Personat me të cilët ke folur</h3>
+          <h3>Bisedat</h3>
           {conversations.map(c=>{
             const active=c.id===selectedConversation;
             return <button key={c.id} className={"conversation-user"+(active?" active":"")} onClick={()=>setSelectedConversation(c.id)}>
               <span className="conversation-avatar">{(c.otherName||"P").slice(0,1).toUpperCase()}</span>
               <span className="conversation-user-text">
                 <b>{c.otherName}</b>
-                <small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||c.listingTitle}</small>
+                <small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Mesazh"}</small>
               </span>
               <span className="conversation-time">{c.lastMessage?.created_at?new Date(c.lastMessage.created_at).toLocaleDateString("sq-AL",{day:"2-digit",month:"2-digit"}):""}</span>
             </button>;
