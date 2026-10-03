@@ -47,7 +47,7 @@ export default function DhurojeHome(){
     window.history.pushState({page,id,conversation}, "", url);
     setPageRoute({page,id,conversation});
   }
-  function goHome(){navigatePage("home");setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);}
+  function goHome(){navigatePage("home");setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);setPostAuth(false);}
   useEffect(()=>{
     const sync=()=>{const p=new URLSearchParams(window.location.search);setPageRoute({page:p.get("page")||"home",id:p.get("id")||undefined,conversation:p.get("conversation")||undefined});};
     sync();window.addEventListener("popstate",sync);return()=>window.removeEventListener("popstate",sync);
@@ -88,13 +88,34 @@ export default function DhurojeHome(){
   },[user]);
 
   useEffect(()=>{
-    if(pageRoute.page==="listing"&&pageRoute.id){
+    const p=pageRoute.page;
+    if(p==="home"){
+      setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);setPostAuth(false);
+    }else if(p==="listing"&&pageRoute.id){
       const found=listings.find(x=>x.id===pageRoute.id);
-      if(found)setActiveListing(found);
-    }else if(pageRoute.page==="profile"&&pageRoute.id)setPublicProfileId(pageRoute.id);
-    else if(pageRoute.page==="messages"){setShowMessages(true);setMessageConversationId(pageRoute.conversation||"");}
-    else if(pageRoute.page==="dashboard"){setShowDashboard(true);navigatePage("dashboard");}
-  },[pageRoute,listings]);
+      if(found){setActiveListing(found);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);}
+    }else if(p==="profile"&&pageRoute.id){
+      setPublicProfileId(pageRoute.id);setActiveListing(null);setEditingListing(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
+    }else if(p==="messages"){
+      setShowMessages(true);setMessageConversationId(pageRoute.conversation||"");setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
+    }else if(p==="dashboard"){
+      setShowDashboard(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowProfile(false);setShowNotifications(false);
+    }else if(p==="notifications"){
+      setShowNotifications(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);
+    }else if(p==="me"){
+      setShowProfile(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowNotifications(false);
+    }else if(p==="post"){
+      if(user){setShowGive(true);setPostChoice(false);setShowAuth(false);}else{setShowGive(false);setPostChoice(true);setShowAuth(false);}
+      setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
+    }else if(p==="post-choice"){
+      setPostChoice(true);setShowGive(false);setShowAuth(false);
+    }else if(p==="auth"){
+      setShowAuth(true);setAuthMode((pageRoute.conversation as "login"|"signup")||"login");setPostAuth(true);setPostChoice(false);
+    }else if(p==="edit"&&pageRoute.id){
+      const found=listings.find(x=>x.id===pageRoute.id);
+      if(found){setEditingListing(found);setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);}
+    }
+  },[pageRoute,listings,user]);
 
   const filtered=useMemo(()=>{
     let a=listings.filter(x=>(category==="Të gjitha"||x.category===categoryDb[category])&&(x.title+" "+(x.description||"")).toLowerCase().includes(query.toLowerCase())&&(!favoritesOnly||favorites.includes(x.id)));
@@ -139,8 +160,8 @@ export default function DhurojeHome(){
     setNotificationCount(count||0);
   }
   useEffect(()=>{loadNotificationCount();},[user]);
-  async function openNotifications(){if(!user){setShowAuth(true);return;}setShowNotifications(true);}
-  async function openProfile(){if(!user){setShowAuth(true);return;}setShowProfile(true);}
+  async function openNotifications(){if(!user){setShowAuth(true);return;}setShowNotifications(true);navigatePage("notifications");}
+  async function openProfile(){if(!user){setShowAuth(true);return;}setShowProfile(true);navigatePage("me");}
   async function toggleFavorite(id:string){
     if(!requireAuth())return;
     if(favorites.includes(id)){await supabase.from("dhuroje_favorites").delete().eq("user_id",user.id).eq("listing_id",id);setFavorites(x=>x.filter(v=>v!==id));}
@@ -206,6 +227,7 @@ export default function DhurojeHome(){
     const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
     if(currentUser.id!==listing.owner_id){setError("Nuk mund ta ndryshosh këtë shpallje.");return;}
     setEditingListing(listing);
+    navigatePage("edit",listing.id);
   }
   async function markAsGiven(listing:Listing){
     const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
@@ -260,10 +282,13 @@ export default function DhurojeHome(){
     setError("");
     setPostingCategory("Ushqim");
     if(user){setPostChoice(false);setShowGive(true);navigatePage("post");return;}
-    setPostChoice(true);setShowGive(false);
+    setPostChoice(true);setShowGive(false);navigatePage("post-choice");
   }
   function choosePostAuth(mode:"login"|"signup"){
     setAuthMode(mode);setPostAuth(true);setPostChoice(false);setShowAuth(true);
+    const params=new URLSearchParams({page:"auth",mode});
+    window.history.pushState({page:"auth",mode},"",window.location.pathname+"?"+params.toString());
+    setPageRoute({page:"auth",conversation:mode});
   }
   function locate(){
     if(!navigator.geolocation)return setError("Ky shfletues nuk mbështet lokacionin.");
@@ -311,7 +336,7 @@ export default function DhurojeHome(){
     </form></div></div>}
 
     {activeListing&&<div className="page-screen"><ListingDetail listing={activeListing} image={images[activeListing.id]?.[0]} saved={favorites.includes(activeListing.id)} claimed={claims.includes(activeListing.id)} isOwner={user?.id===activeListing.owner_id} onClose={goHome} onClaim={()=>claim(activeListing.id)} onSave={()=>toggleFavorite(activeListing.id)} onChat={()=>startChat(activeListing)} onEdit={()=>quickEditListing(activeListing)} onMarkGiven={()=>markAsGiven(activeListing)} onDelete={()=>deleteListing(activeListing)} onProfile={()=>{setPublicProfileId(activeListing.owner_id);navigatePage("profile",activeListing.owner_id)}}/></div>}
-    {editingListing&&<div className="page-screen"><EditListingModal listing={editingListing} onClose={()=>setEditingListing(null)} onSaved={async()=>{setEditingListing(null);await load();}}/></div>}
+    {editingListing&&<div className="page-screen"><EditListingModal listing={editingListing} onClose={()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();}} onSaved={async()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();await load();}}/></div>}
     {postChoice&&<div className="page-screen"><div className="page-content"><div className="modal auth-choice"><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Si dëshiron të vazhdosh?</h2></div><button type="button" className="close" onClick={()=>setPostChoice(false)}>×</button></div><p className="form-help">Për të dhuruar një gjë, zgjidh nëse ke llogari apo po poston për herë të parë.</p><button className="primary full" onClick={()=>choosePostAuth("login")}>Kam llogari · Hyr</button><button className="secondary full" onClick={()=>choosePostAuth("signup")}>Jam i ri · Krijo llogari</button></div></div></div>}
     {showAuth&&<div className="page-screen"><div className="page-content"><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>{postAuth?(authMode==="login"?"Hyr për të dhuruar":"Krijo llogari për të dhuruar"):(pendingPost?"Krijo llogari":"Krijo llogari")}</h2></div><button type="button" className="close" onClick={()=>{setShowAuth(false);setPostAuth(false);setPendingPost(null)}}>×</button></div>{postAuth&&<p className="form-help">{authMode==="login"?"Hyr me llogarinë tënde dhe pastaj plotëso postimin.":"Krijo llogarinë tënde një herë dhe pastaj plotëso postimin."}</p>}{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Krijo llogari"}</button>{!pendingPost&&!postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}{postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Jam i ri · Krijo llogari":"Kam llogari · Hyr"}</button>}</form></div></div>}
     {showMessages&&<div className="page-screen"><Messages user={user} initialConversationId={messageConversationId} onClose={goHome}/></div>}
