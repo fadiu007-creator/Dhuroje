@@ -200,7 +200,6 @@ export default function DhurojeHome(){
       owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
       category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:String(f.get("city")||listingCity||profile?.city||location),
       latitude:coords?.lat??null,longitude:coords?.lon??null,
-      food_best_before:f.get("food_best_before")?new Date(String(f.get("food_best_before"))).toISOString():null,
       food_refrigerated:categoryDb[String(f.get("category"))]==="food"&&f.get("food_refrigerated")==="on",food_opened:categoryDb[String(f.get("category"))]==="food"&&f.get("food_opened")==="on"
     }).select("*").single();
     if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return false;}
@@ -414,7 +413,6 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
       category:categoryValue,
       location_name:String(f.get("location_name")||"").trim()||null,
       latitude:lat,longitude:lon,
-      food_best_before:isFood&&f.get("food_best_before")?new Date(String(f.get("food_best_before"))).toISOString():null,
       food_refrigerated:isFood&&f.get("food_refrigerated")==="on",
       food_opened:isFood&&f.get("food_opened")==="on"
     }).eq("id",listing.id).eq("owner_id",(await supabase.auth.getUser()).data.user?.id||"");
