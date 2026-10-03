@@ -497,3 +497,10 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
  .page-screen>.page-content{min-height:calc(100dvh - 128px)!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:20px!important}
  .route-shell{padding-top:60px!important;padding-bottom:68px!important}
 }
+
+/* Optional profile contact/photo fields */
+.account-avatar img{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
+.profile-photo-editor{display:flex;align-items:center;gap:14px;margin:2px 0 16px}
+.profile-photo-preview{width:72px;height:72px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--green2);color:var(--green);font-size:25px;font-weight:800;flex:none;border:1px solid var(--line)}
+.profile-photo-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.profile-photo-editor .form-help{display:block;margin-top:7px}
