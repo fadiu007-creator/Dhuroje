@@ -86,6 +86,15 @@ export default function DhurojeHome(){
     return()=>{supabase.removeChannel(channel);};
   },[user]);
 
+  useEffect(()=>{
+    if(pageRoute.page==="listing"&&pageRoute.id){
+      const found=listings.find(x=>x.id===pageRoute.id);
+      if(found)setActiveListing(found);
+    }else if(pageRoute.page==="profile"&&pageRoute.id)setPublicProfileId(pageRoute.id);
+    else if(pageRoute.page==="messages"){setShowMessages(true);setMessageConversationId(pageRoute.conversation||"");}
+    else if(pageRoute.page==="dashboard"){setShowDashboard(true);navigatePage("dashboard");}
+  },[pageRoute,listings]);
+
   const filtered=useMemo(()=>{
     let a=listings.filter(x=>(category==="Të gjitha"||x.category===categoryDb[category])&&(x.title+" "+(x.description||"")).toLowerCase().includes(query.toLowerCase())&&(!favoritesOnly||favorites.includes(x.id)));
     if(nearbyOnly&&coords)a=a.filter(x=>{const d=distanceKm(coords.lat,coords.lon,x.latitude,x.longitude);return d!=null&&d<=25;});
@@ -306,7 +315,7 @@ export default function DhurojeHome(){
     {showAuth&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setShowAuth(false)}><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">{postAuth?"DHUROJE":"DHUROJE"}</p><h2>{postAuth?(authMode==="login"?"Hyr për të dhuruar":"Krijo llogari për të dhuruar"):(pendingPost?"Krijo llogari":"Krijo llogari")}</h2></div><button type="button" className="close" onClick={()=>{setShowAuth(false);setPostAuth(false);setPendingPost(null)}}>×</button></div>{postAuth&&<p className="form-help">{authMode==="login"?"Hyr me llogarinë tënde dhe pastaj plotëso postimin.":"Krijo llogarinë tënde një herë dhe pastaj plotëso postimin."}</p>}{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Krijo llogari"}</button>{!pendingPost&&!postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}{postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Jam i ri · Krijo llogari":"Kam llogari · Hyr"}</button>}</form></div>}
     {showMessages&&<div className="route-shell"><Messages user={user} initialConversationId={messageConversationId} onClose={goHome}/></div>} {showNotifications&&<Notifications user={user} onClose={()=>setShowNotifications(false)} onChanged={loadNotificationCount}/>} {showProfile&&<ProfileModal user={user} onClose={()=>setShowProfile(false)} onChanged={loadNotificationCount}/>} {publicProfileId&&<div className="route-shell"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
     {showDashboard&&<div className="route-shell"><Dashboard user={user} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven}/></div>} 
-    <nav className="bottom-nav"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false)}}>⌂<span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(x=>!x);setMapMode(false);}}}>♡<span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add">＋</button><button onClick={()=>requireAuth()&&setShowMessages(true)}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
+    <nav className="bottom-nav"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false)}}>⌂<span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(x=>!x);setMapMode(false);}}}>♡<span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add">＋</button><button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
   </main>;
 }
 
