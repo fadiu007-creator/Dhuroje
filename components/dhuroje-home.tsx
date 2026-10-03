@@ -15,7 +15,6 @@ type Claim = { id:string; listing_id:string; claimant_id:string; status:string; 
 
 const categories:Category[]=["Të gjitha","Ushqim","Veshmbathje","Shtëpi","Elektronikë","Fëmijë","Libra","Të tjera"];
 const cities=["Prishtinë","Prizren","Pejë","Ferizaj","Gjilan","Gjakovë","Mitrovicë","Vushtrri","Podujevë","Fushë Kosovë","Lipjan","Suharekë","Rahovec","Drenas","Skenderaj","Kamenicë","Viti","Istog","Deçan","Klinë","Malishevë","Dragash","Kaçanik","Shtime","Obiliq","Graçanicë","Tiranë","Durrës","Vlorë","Shkodër","Elbasan","Fier","Korçë","Berat","Lushnjë","Kukës","Lezhë","Pogradec"];
-const cities=["Prishtinë","Prizren","Pejë","Ferizaj","Gjilan","Gjakovë","Mitrovicë","Vushtrri","Podujevë","Suharekë","Rahovec","Lipjan","Drenas","Skenderaj","Kamenicë","Viti","Deçan","Istog","Klinë","Malishevë","Fushë Kosovë","Obiliq","Kaçanik","Shtime","Dragash","Tiranë","Durrës","Elbasan","Vlorë","Fier","Korçë","Berat","Gjirokastër","Shkodër","Lezhë","Kukës"];
 const categoryDb:Record<string,string>={Ushqim:"food",Veshmbathje:"clothing",Shtëpi:"home",Elektronikë:"electronics",Fëmijë:"kids",Libra:"books","Të tjera":"other"};
 const categoryLabel:Record<string,string>={food:"Ushqim",clothing:"Veshmbathje",home:"Shtëpi",electronics:"Elektronikë",kids:"Fëmijë",books:"Libra",other:"Të tjera"};
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
@@ -39,7 +38,6 @@ export default function DhurojeHome(){
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
   const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[foodFilter,setFoodFilter]=useState<"all"|"sealed"|"opened"|"refrigerated">("all");
-  const [filterCity,setFilterCity]=useState(""),[foodOnly,setFoodOnly]=useState(false),[photoOnly,setPhotoOnly]=useState(false),[showFilters,setShowFilters]=useState(false);
   const [postingCity,setPostingCity]=useState("Ferizaj");
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
@@ -130,14 +128,13 @@ export default function DhurojeHome(){
       (category==="Të gjitha"||x.category===categoryDb[category])&&
       (x.title+" "+(x.description||"")).toLowerCase().includes(query.toLowerCase())&&
       (!favoritesOnly||favorites.includes(x.id))&&
-      (!filterCity||x.location_name===filterCity)&&
-      (!foodOnly||x.category==="food")&&
-      (!photoOnly||!!images[x.id]?.length)
+      (!searchCity||x.location_name===searchCity)&&
+      (foodFilter==="all"||(foodFilter==="sealed"&&x.category==="food"&&!x.food_opened)||(foodFilter==="opened"&&x.category==="food"&&x.food_opened)||(foodFilter==="refrigerated"&&x.category==="food"&&x.food_refrigerated))
     );
     if(nearbyOnly&&coords)a=a.filter(x=>{const d=distanceKm(coords.lat,coords.lon,x.latitude,x.longitude);return d!=null&&d<=25;});
     if(sortMode==="near"&&coords)a=[...a].sort((x,y)=>(distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)??9999)-(distanceKm(coords.lat,coords.lon,y.latitude,y.longitude)??9999));
     return a;
-  },[listings,category,query,coords,nearbyOnly,favoritesOnly,favorites,sortMode,filterCity,foodOnly,photoOnly,images]);
+  },[listings,category,query,coords,nearbyOnly,favoritesOnly,favorites,sortMode,searchCity,foodFilter,images]);
 
   async function requireAuthenticatedUser(){
     const {data,error:e}=await supabase.auth.getUser();
