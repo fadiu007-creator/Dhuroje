@@ -347,7 +347,7 @@ export default function DhurojeHome(){
     {showNotifications&&<div className="page-screen"><Notifications user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
-    {showDashboard&&<div className="page-screen"><Dashboard user={user} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven}/></div>}
+    {showDashboard&&<div className="page-screen"><Dashboard user={user} profile={profile} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven} onProfile={openProfile} onMessages={()=>{setShowMessages(true);navigatePage("messages")}} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id)}} onSaved={()=>{setFavoritesOnly(true);navigatePage("saved")}} onRequested={()=>navigatePage("dashboard")}/></div>}
     <nav className="bottom-nav"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}>⌂<span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(true);setMapMode(false);navigatePage("saved");}}}>♡<span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add">＋</button><button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}>▱<span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}>●<span>Profili</span></button></nav>
   </main>;
 }
@@ -661,7 +661,7 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
     </div>
   </div>;
 }
-function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void}){
+function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested,profile}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void}){
   const [section,setSection]=useState<"overview"|"listings"|"requested">("overview");
   const [mine,setMine]=useState<Listing[]>([]),[wanted,setWanted]=useState<Claim[]>([]),[busy,setBusy]=useState(false);
   async function load(){if(!user)return;const [{data:ls},{data:myClaims}]=await Promise.all([
@@ -994,134 +994,6 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
           </div>
         </>
       }
-    </div>
-  </div>;
-}
-function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void}){
-  const [tab,setTab]=useState<"my"|"requests"|"wanted">("my");
-  const [mine,setMine]=useState<Listing[]>([]),[incoming,setIncoming]=useState<Claim[]>([]),[wanted,setWanted]=useState<Claim[]>([]);
-  const [pickups,setPickups]=useState<any[]>([]),[busy,setBusy]=useState(false),[scheduleFor,setScheduleFor]=useState<Claim|null>(null),[reviewFor,setReviewFor]=useState<any>(null);
-
-  async function load(){
-    if(!user)return;
-    const [{data:ls},{data:cs},{data:myClaims}]=await Promise.all([
-      supabase.from("dhuroje_listings").select("*").eq("owner_id",user.id).order("created_at",{ascending:false}),
-      supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*), claimant:dhuroje_profiles(display_name)").order("created_at",{ascending:false}),
-      supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*)").eq("claimant_id",user.id).order("created_at",{ascending:false})
-    ]);
-    setMine(ls||[]);
-    const all=(cs||[]) as any[];
-    setIncoming(all.filter((x:any)=>x.listing?.owner_id===user.id));
-    setWanted((myClaims||[]).filter((x:any)=>x.status!=="cancelled") as any[]);
-    const claimIds=[...all.filter((x:any)=>x.listing?.owner_id===user.id).map((x:any)=>x.id),...(myClaims||[]).map((x:any)=>x.id)];
-    if(claimIds.length){
-      const {data:ps}=await supabase.from("dhuroje_pickups").select("*").in("claim_id",[...new Set(claimIds)]).order("scheduled_at",{ascending:true});
-      setPickups(ps||[]);
-    }else setPickups([]);
-  }
-  useEffect(()=>{load();},[]);
-
-  async function action(c:Claim,status:string){
-    setBusy(true);let error:any=null;
-    if(status==="accepted"){const result=await supabase.rpc("dhuroje_accept_claim",{p_claim_id:c.id});error=result.error;}
-    else{const result=await supabase.from("dhuroje_claims").update({status}).eq("id",c.id);error=result.error;if(!error&&status==="collected"){const r=await supabase.from("dhuroje_listings").update({status:"collected"}).eq("id",c.listing_id).eq("owner_id",user.id);error=r.error;}}
-    if(!error){await load();onChanged();}else alert(error.message);setBusy(false);
-  }
-  async function withdrawRequest(c:Claim){
-    if(c.status!=="pending")return;if(!window.confirm("Ta tërheqim këtë kërkesë?"))return;
-    setBusy(true);
-    const {data:removed,error}=await supabase.from("dhuroje_claims").update({status:"cancelled"}).eq("id",c.id).eq("claimant_id",user.id).eq("status","pending").select("id").maybeSingle();
-    if(error)alert(error.message);
-    else if(!removed)alert("Kërkesa nuk u gjet ose nuk mund të tërhiqet më.");
-    else{await load();onChanged();}
-    setBusy(false);
-  }
-
-  async function setListing(id:string,status:string){
-    setBusy(true);
-    const {error}=await supabase.from("dhuroje_listings").update({status}).eq("id",id).eq("owner_id",user.id);
-    if(error)alert(error.message);else{await load();onChanged();}
-    setBusy(false);
-  }
-  async function deleteListing(listing:Listing){
-    if(!window.confirm("Ta fshijmë këtë shpallje?"))return;
-    setBusy(true);
-    const {error}=await supabase.rpc("dhuroje_delete_listing",{p_listing_id:listing.id});
-    if(error)alert(error.message);else{await load();onChanged();}
-    setBusy(false);
-  }
-  async function schedulePickup(c:Claim){
-    const form=document.getElementById("pickup-form") as HTMLFormElement|null;
-    if(!form)return;
-    const f=new FormData(form);
-    setBusy(true);
-    const existing=pickupFor(c.id);
-    const payload={claim_id:c.id,listing_id:c.listing_id,owner_id:user.id,claimant_id:c.claimant_id,scheduled_at:f.get("scheduled_at")?new Date(String(f.get("scheduled_at"))).toISOString():null,location:String(f.get("location")||""),notes:String(f.get("notes")||""),status:"proposed"};
-    const result=existing?await supabase.from("dhuroje_pickups").update(payload).eq("id",existing.id):await supabase.from("dhuroje_pickups").insert(payload);
-    if(result.error)alert(result.error.message);else{setScheduleFor(null);await load();onChanged();}
-    setBusy(false);
-  }
-  async function updatePickup(p:any,status:string){
-    setBusy(true);
-    const {error}=await supabase.from("dhuroje_pickups").update({status,updated_at:new Date().toISOString()}).eq("id",p.id);
-    if(error)alert(error.message);else{await load();onChanged();}
-    setBusy(false);
-  }
-  const pickupFor=(claimId:string)=>pickups.find(p=>p.claim_id===claimId);
-
-  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
-    <div className="modal dashboard">
-      <div className="modal-head"><div><p className="eyebrow">LLOGARIA IME</p><h2>Paneli im</h2></div><button className="close" onClick={onClose}>×</button></div>
-      <div className="dash-tabs">
-        <button className={tab==="my"?"active":""} onClick={()=>setTab("my")}>Shpalljet e mia ({mine.length})</button>
-        <button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Kërkesat ({incoming.filter(x=>x.status==="pending").length})</button>
-        <button className={tab==="wanted"?"active":""} onClick={()=>setTab("wanted")}>Të kërkuarat ({wanted.length})</button>
-      </div>
-
-      {tab==="my"&&<div className="dash-list">
-        {mine.length?mine.map(x=><div className="dash-row" key={x.id}>
-          <span className="dash-icon">{emoji(x.category)}</span><div><b>{x.title}</b><small>{x.status==="available"?"E disponueshme":x.status==="reserved"?"E rezervuar":x.status==="collected"?"E dhuruar":"Jo aktive"}</small></div>
-          {x.status==="available"&&<><button disabled={busy} onClick={()=>onEdit(x)}>✏️ Ndrysho</button><button disabled={busy} onClick={()=>onMarkGiven(x)}>✓ E dhuruar</button><button disabled={busy} className="danger" onClick={()=>deleteListing(x)}>🗑️ Fshi</button></>}
-          {x.status==="reserved"&&<button disabled={busy} onClick={()=>setListing(x.id,"collected")}>✓ U mor</button>}
-        </div>):<div className="empty">Nuk ke publikuar ende asgjë.</div>}
-      </div>}
-
-      {tab==="requests"&&<div className="dash-list">
-        {incoming.length?incoming.map(c=>{
-          const p=pickupFor(c.id);
-          return <div className="dash-row" key={c.id}>
-            <span className="dash-icon">{emoji(c.listing?.category||"other")}</span>
-            <div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Kërkesë e re":c.status} · Nga {c.claimant?.display_name||"përdorues i regjistruar"}{p?.scheduled_at?" · Marrja: "+new Date(p.scheduled_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"}):""}</small></div>
-            {c.claimant_id&&<button disabled={busy} onClick={()=>c.listing&&onChat(c.listing,c.claimant_id)}>💬 Mesazho</button>}
-            {c.status==="pending"&&<><button disabled={busy} className="accept" onClick={()=>action(c,"accepted")}>Prano</button><button disabled={busy} onClick={()=>action(c,"declined")}>Refuzo</button></>}
-            {c.status==="accepted"&&<><button disabled={busy} onClick={()=>setScheduleFor(c)}>📅 Cakto marrjen</button>{p?.status==="confirmed"&&<button disabled={busy} onClick={()=>updatePickup(p,"completed")}>✓ U mor</button>}{p?.status==="completed"&&<button disabled={busy} onClick={()=>setReviewFor({targetId:c.claimant_id,listingId:c.listing_id,title:c.listing?.title||"Dhuratë"})}>⭐ Vlerëso</button>}</>}
-          </div>
-        }):<div className="empty">Nuk ke kërkesa ende.</div>}
-      </div>}
-
-      {tab==="wanted"&&<div className="dash-list">
-        {wanted.length?wanted.map((c:any)=>{
-          const p=pickupFor(c.id);
-          return <div className="dash-row" key={c.id}>
-            <span className="dash-icon">{emoji(c.listing?.category||"other")}</span>
-            <div><b>{c.listing?.title||"Dhuratë"}</b><small>{c.status==="pending"?"Në pritje":c.status==="accepted"?"Pranuar":c.status==="declined"?"Refuzuar":c.status}{p?.scheduled_at?" · Marrja: "+new Date(p.scheduled_at).toLocaleString("sq-AL",{dateStyle:"short",timeStyle:"short"}):""}</small></div>
-            {c.status==="pending"&&<button disabled={busy} className="danger" onClick={()=>withdrawRequest(c)}>↩ Tërhiq kërkesën</button>}
-            {c.status==="accepted"&&p?.status==="proposed"&&<button disabled={busy} className="accept" onClick={()=>updatePickup(p,"confirmed")}>✓ Konfirmo marrjen</button>}
-            {c.status==="accepted"&&!p&&<button disabled={busy} onClick={()=>onChat(c.listing,c.listing?.owner_id)}>💬 Kontakto</button>}{p?.status==="completed"&&<button disabled={busy} onClick={()=>setReviewFor({targetId:c.listing?.owner_id,listingId:c.listing_id,title:c.listing?.title||"Dhuratë"})}>⭐ Vlerëso</button>}
-          </div>
-        }):<div className="empty">Nuk ke kërkuar ende ndonjë dhuratë.</div>}
-      </div>}
-
-      {reviewFor&&<ReviewModal user={user} targetId={reviewFor.targetId} listingId={reviewFor.listingId} listingTitle={reviewFor.title} onClose={()=>setReviewFor(null)} onSaved={async()=>{setReviewFor(null);await load();onChanged();}}/>}
-      {scheduleFor&&<div className="pickup-inline">
-        <div className="modal-head"><div><p className="eyebrow">TAKIMI</p><h3>Cakto marrjen</h3></div><button className="close" onClick={()=>setScheduleFor(null)}>×</button></div>
-        <form id="pickup-form" onSubmit={e=>{e.preventDefault();schedulePickup(scheduleFor)}}>
-          <label>Kur<input name="scheduled_at" type="datetime-local" required defaultValue={pickupFor(scheduleFor.id)?.scheduled_at?new Date(pickupFor(scheduleFor.id).scheduled_at).toISOString().slice(0,16):""}/></label>
-          <label>Ku<input name="location" required defaultValue={pickupFor(scheduleFor.id)?.location||scheduleFor.listing?.location_name||""} placeholder="Qyteti / vendi i marrjes"/></label>
-          <label>Shënim<textarea name="notes" defaultValue={pickupFor(scheduleFor.id)?.notes||""} placeholder="P.sh. hyrja, kati, numri i telefonit..."/></label>
-          <button className="primary full" disabled={busy}>{busy?"Po ruhet…":"Dërgo propozimin e marrjes"}</button>
-        </form>
-      </div>}
     </div>
   </div>;
 }
