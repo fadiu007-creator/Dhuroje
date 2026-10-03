@@ -43,7 +43,7 @@ async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promi
     }
   }
   if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej nën 500 KB.");
-  return new File([blob],"photo.webp",{type:"image/webp",lastModified:Date.now()});
+  const type=blob.type||"image/webp";const ext=type==="image/jpeg"?"jpg":"webp";return new File([blob],"photo."+ext,{type,lastModified:Date.now()});
 }
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
