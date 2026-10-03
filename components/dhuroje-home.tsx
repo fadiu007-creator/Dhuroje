@@ -126,7 +126,7 @@ export default function DhurojeHome(){
       (category==="Të gjitha"||x.category===categoryDb[category])&&
       (x.title+" "+(x.description||"")).toLowerCase().includes(query.toLowerCase())&&
       (!favoritesOnly||favorites.includes(x.id))&&
-      (!searchCity||x.location_name===searchCity)&&
+      (!searchCity||x.location_name===searchCity)
       );
     if(nearbyOnly&&coords)a=a.filter(x=>{const d=distanceKm(coords.lat,coords.lon,x.latitude,x.longitude);return d!=null&&d<=25;});
     if(sortMode==="near"&&coords)a=[...a].sort((x,y)=>(distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)??9999)-(distanceKm(coords.lat,coords.lon,y.latitude,y.longitude)??9999));
