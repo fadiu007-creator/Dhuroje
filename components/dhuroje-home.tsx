@@ -189,6 +189,7 @@ export default function DhurojeHome(){
     setShowAuth(false);
     if(postAuth){setPostAuth(false);setPostChoice(false);setShowGive(true);navigatePage("post");}
     await load();
+    navigatePage("home");
   }
   async function signOut(){await supabase.auth.signOut();setShowMenu(false);setShowProfile(false);setShowNotifications(false);await load();}
   async function loadNotificationCount(){
