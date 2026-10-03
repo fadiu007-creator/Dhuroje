@@ -269,3 +269,5 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 @media(max-width:560px){.public-profile-post{grid-template-columns:60px 1fr}.public-profile-post-image{width:60px;height:60px}}
 
 .poster-name-link{border:0;background:transparent;padding:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+
+.message-person{display:flex;align-items:center;gap:10px;border:1px solid #e3e6e5;background:#f4f8f6;border-radius:10px;padding:10px 12px;margin-bottom:10px}.message-person span{font-size:22px}.message-person b,.message-person small{display:block}.message-person small{color:#737b78;font-size:10px;margin-top:2px}
