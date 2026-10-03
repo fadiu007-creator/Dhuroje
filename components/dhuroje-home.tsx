@@ -48,7 +48,7 @@ export default function DhurojeHome(){
     window.history.pushState({page,id,conversation}, "", url);
     setPageRoute({page,id,conversation});
   }
-  function goHome(){navigatePage("home");setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);setPostAuth(false);}
+  function goHome(){navigatePage("home");setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);setPostAuth(false);setMessageConversationId("");setFavoritesOnly(false);setNearbyOnly(false);setShowFilters(false);setSearchCity("");}
   useEffect(()=>{
     const sync=()=>{const p=new URLSearchParams(window.location.search);setPageRoute({page:p.get("page")||"home",id:p.get("id")||undefined,conversation:p.get("conversation")||undefined});};
     sync();window.addEventListener("popstate",sync);return()=>window.removeEventListener("popstate",sync);
@@ -91,30 +91,30 @@ export default function DhurojeHome(){
   useEffect(()=>{
     const p=pageRoute.page;
     if(p==="home"){
-      setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);setPostAuth(false);
+      setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);setPostAuth(false);setMessageConversationId("");setFavoritesOnly(false);
     }else if(p==="listing"&&pageRoute.id){
       const found=listings.find(x=>x.id===pageRoute.id);
-      if(found){setActiveListing(found);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);}
+      if(found){setActiveListing(found);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);}
     }else if(p==="profile"&&pageRoute.id){
-      setPublicProfileId(pageRoute.id);setActiveListing(null);setEditingListing(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
+      setPublicProfileId(pageRoute.id);setActiveListing(null);setEditingListing(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);
     }else if(p==="messages"){
-      setShowMessages(true);setMessageConversationId(pageRoute.conversation||"");setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
+      setShowMessages(true);setMessageConversationId(pageRoute.conversation||"");setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);
     }else if(p==="dashboard"){
-      setShowDashboard(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowProfile(false);setShowNotifications(false);
+      setShowDashboard(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);
     }else if(p==="notifications"){
       setShowNotifications(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);
     }else if(p==="saved"){
-      setFavoritesOnly(true);setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);
+      setFavoritesOnly(true);setActiveListing(null);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);
     }else if(p==="me"){
       setShowProfile(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowNotifications(false);
     }else if(p==="post"){
       if(user){setShowGive(true);setPostChoice(false);setShowAuth(false);}else{setShowGive(false);setPostChoice(true);setShowAuth(false);}
       setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
     }else if(p==="post-choice"){
-      setPostChoice(true);setShowGive(false);setShowAuth(false);
+      setPostChoice(true);setShowGive(false);setShowAuth(false);setFavoritesOnly(false);
     }else if(p==="auth"){
       const authKind=pageRoute.conversation||"login";
-      setShowAuth(true);setAuthMode(authKind.endsWith("signup")?"signup":"login");setPostAuth(authKind.startsWith("post-"));setPostChoice(false);
+      setShowAuth(true);setAuthMode(authKind.endsWith("signup")?"signup":"login");setPostAuth(authKind.startsWith("post-"));setPostChoice(false);setShowGive(false);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
     }else if(p==="edit"&&pageRoute.id){
       const found=listings.find(x=>x.id===pageRoute.id);
       if(found){setEditingListing(found);setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);}
