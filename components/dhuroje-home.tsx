@@ -195,6 +195,8 @@ export default function DhurojeHome(){
     setClaims(x=>[...x,id]);
   }
   async function finishListing(postingUser:any,f:FormData,filesOverride?:File[]){
+    const description=String(f.get("description")||"").trim();
+    if(!description){setError("Ju lutem plotësoni përshkrimin.");return null;}
     const files=filesOverride?.length?filesOverride:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
     if(!files.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return null;}
     // Never create the listing until at least one selected photo is actually ready.
@@ -249,6 +251,8 @@ export default function DhurojeHome(){
   async function createListing(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget);
+    const description=String(f.get("description")||"").trim();
+    if(!description){setError("Ju lutem plotësoni përshkrimin.");return;}
     const selectedPhotos=selectedPhotoFiles.length?selectedPhotoFiles:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
     if(!selectedPhotos.length || selectedPhotos.length!==photoPreviews.length){setPhotoError(true);setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");return;}
     setPosting(true);
@@ -388,7 +392,7 @@ export default function DhurojeHome(){
     {showGive&&<div className="route-shell"><div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&goHome()}><form className="modal" onSubmit={createListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
       <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0);if(files.length){const next=[...selectedPhotoFiles,...files].slice(0,6);setPhotoError(false);setError("");setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));e.currentTarget.value="";}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Shto minimum 1 foto , maksimum 6 foto.</small></div>
-      <label>Përshkrimi<textarea name="description" placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
+      <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
       <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
     </form></div></div>}
@@ -452,6 +456,8 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
   async function save(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setSaving(true);setError("");
     const f=new FormData(e.currentTarget);
+    const description=String(f.get("description")||"").trim();
+    if(!description){setError("Ju lutem plotësoni përshkrimin.");setSaving(false);return;}
     const categoryValue=String(f.get("category"));
     const isFood=categoryValue==="food";
     const {error:e1}=await supabase.from("dhuroje_listings").update({
@@ -489,7 +495,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     {error&&<div className="error">{error}</div>}
     <label>Çfarë po dhuron?<input name="title" defaultValue={listing.title} required /></label>
     <label>Kategoria<select name="category" value={category} onChange={e=>setCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x} value={categoryDb[x]}>{x}</option>)}</select></label>
-    <label>Përshkrimi<textarea name="description" defaultValue={listing.description||""}/></label>
+    <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" defaultValue={listing.description||""} required /></label>
     <label>Qyteti<select name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
     {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
