@@ -38,7 +38,6 @@ export default function DhurojeHome(){
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
   const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[foodFilter,setFoodFilter]=useState<"all"|"sealed"|"opened"|"refrigerated">("all");
-  const [postingCity,setPostingCity]=useState("Ferizaj");
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
   function navigatePage(page:string,id?:string,conversation?:string){
@@ -134,7 +133,7 @@ export default function DhurojeHome(){
     if(nearbyOnly&&coords)a=a.filter(x=>{const d=distanceKm(coords.lat,coords.lon,x.latitude,x.longitude);return d!=null&&d<=25;});
     if(sortMode==="near"&&coords)a=[...a].sort((x,y)=>(distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)??9999)-(distanceKm(coords.lat,coords.lon,y.latitude,y.longitude)??9999));
     return a;
-  },[listings,category,query,coords,nearbyOnly,favoritesOnly,favorites,sortMode,searchCity,foodFilter,images]);
+  },[listings,category,query,coords,nearbyOnly,favoritesOnly,favorites,sortMode,searchCity,foodFilter]);
 
   async function requireAuthenticatedUser(){
     const {data,error:e}=await supabase.auth.getUser();
@@ -171,7 +170,6 @@ export default function DhurojeHome(){
     const {count}=await supabase.from("dhuroje_notifications").select("id",{count:"exact",head:true}).eq("recipient_id",user.id).is("read_at",null);
     setNotificationCount(count||0);
   }
-  useEffect(()=>{if(profile?.city)setPostingCity(profile.city);},[profile?.city]);
   useEffect(()=>{loadNotificationCount();},[user]);
   async function openNotifications(){if(!user){setShowAuth(true);return;}setShowNotifications(true);navigatePage("notifications");}
   async function openProfile(){if(!user){setShowAuth(true);return;}setShowProfile(true);navigatePage("me");}
@@ -201,7 +199,7 @@ export default function DhurojeHome(){
     const files=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
     const {data:item,error:e1}=await supabase.from("dhuroje_listings").insert({
       owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
-      category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:String(f.get("city")||postingCity||profile?.city||location),
+      category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:String(f.get("city")||listingCity||profile?.city||location),
       latitude:coords?.lat??null,longitude:coords?.lon??null,
       available_until:f.get("available_until")?new Date(String(f.get("available_until"))).toISOString():null,
       food_best_before:f.get("food_best_before")?new Date(String(f.get("food_best_before"))).toISOString():null,
@@ -320,13 +318,13 @@ export default function DhurojeHome(){
   }
 
   return <main>
-    <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="header-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko"/></div><nav className="top-nav"><button className="top-nav-active" onClick={()=>{setFavoritesOnly(false);setMapMode(false);goHome()}}>Eksploro</button><button onClick={()=>{if(user){setFavoritesOnly(true);setMapMode(false);navigatePage("saved")}else{setShowAuth(true);setAuthMode("login");navigatePage("auth")}}}>Të ruajturat</button></nav><div className="top-actions">
+    <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="header-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko"/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></div><nav className="top-nav"><button className="top-nav-active" onClick={()=>{setFavoritesOnly(false);setMapMode(false);goHome()}}>Eksploro</button><button onClick={()=>{if(user){setFavoritesOnly(true);setMapMode(false);navigatePage("saved")}else{setShowAuth(true);setAuthMode("login");navigatePage("auth")}}}>Të ruajturat</button></nav><div className="top-actions">
       <button className="header-link" onClick={()=>openPosting()}>＋ Dhuro</button>{user&&<button className="notification-button" aria-label="Njoftimet" onClick={openNotifications}>🔔{notificationCount>0&&<span>{notificationCount>99?"99+":notificationCount}</span>}</button>}<button className="profile-button" aria-label="Profili" onClick={()=>user?openProfile():setShowMenu(!showMenu)}>●</button>
       {showMenu&&<div className="profile-menu">{user?<><strong>{profile?.display_name||user.email}</strong><button onClick={()=>{setShowMessages(true);navigatePage("messages")}}>💬 Mesazhet</button><button onClick={()=>{if(requireAuth()){setShowDashboard(true);navigatePage("dashboard")}}}>📦 Paneli im</button><button onClick={signOut}>Dil</button></>:<button onClick={()=>{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth")}}>Hyr / Regjistrohu</button>}</div>}
     </div></header>
 
     <section className="hero"><div><p className="eyebrow">♻️ TREGU FALAS I KOMUNITETIT</p><h1>Gjej. Merr.<br/><span>Dhuro.</span></h1><p className="hero-copy">Gjërat që nuk të duhen më mund t'i gjejnë një shtëpi të re — falas, pranë teje.</p></div><div className="hero-actions"><button className="primary" onClick={()=>openPosting()}>＋ Dhuro një gjë</button>{user&&<button className="secondary" onClick={()=>{setShowDashboard(true);navigatePage("dashboard")}}>Paneli im</button>}</div></section>
-    <section className="search-wrap mobile-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Çfarë po kërkon? p.sh. karrige, rroba..."/></section>
+    <section className="search-wrap mobile-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Çfarë po kërkon? p.sh. karrige, rroba..."/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></section>
     <section className="categories">{categories.map(x=><button key={x} className={category===x?"chip active":"chip"} onClick={()=>setCategory(x)}><span className="chip-icon">{x==="Të gjitha"?"✨":x==="Ushqim"?"🥖":x==="Veshmbathje"?"👕":x==="Shtëpi"?"🪑":x==="Elektronikë"?"📱":x==="Fëmijë"?"🧸":x==="Libra"?"📚":"🎁"}</span><span>{x}</span></button>)}</section>
     <div className="market-filter-bar"><button className="filter-button" onClick={()=>setShowFilters(x=>!x)}>⚙️ Filtrat{(searchCity||foodFilter!=="all"||sortMode!=="new")&&<span className="filter-count">●</span>}</button><button className="filter-button" onClick={()=>{setSearchCity("");setFoodFilter("all");setSortMode("new");setNearbyOnly(false);}}>Pastro</button></div>
     {showFilters&&<section className="search-filters"><label>Qyteti<select value={searchCity} onChange={e=>setSearchCity(e.target.value)}><option value="">Të gjitha qytetet</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label><label>Gjendja e ushqimit<select value={foodFilter} onChange={e=>setFoodFilter(e.target.value as any)}><option value="all">Të gjitha</option><option value="sealed">E pahapur</option><option value="opened">E hapur</option><option value="refrigerated">Kërkon frigorifer</option></select></label><label>Rendit<select value={sortMode} onChange={e=>setSortMode(e.target.value as "new"|"near")}><option value="new">Më të rejat</option><option value="near" disabled={!coords}>Më të afërtat</option></select></label></section>}
@@ -344,10 +342,10 @@ export default function DhurojeHome(){
     {!loading&&filtered.length===0&&<div className="empty">Nuk ka ende dhurata që përputhen me kërkimin.</div>}
 
     {showGive&&<div className="route-shell"><div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&goHome()}><form className="modal" onSubmit={createListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
-      <label>Qyteti<select name="city" value={postingCity} onChange={e=>setPostingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select><small className="form-help">Parazgjedhur nga qyteti i profilit. Mund ta ndryshosh për këtë shpallje.</small></label>
+      <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select><small className="form-help">Parazgjedhur nga qyteti i profilit. Mund ta ndryshosh për këtë shpallje.</small></label>
       <div className="photo-picker"><span className="photo-label">Fotot</span><div className="photo-actions"><label className="photo-button">📁 Zgjidh nga telefoni<input name="photos" type="file" accept="image/*" multiple /></label><label className="photo-button photo-camera">📷 Bëj foto<input name="photos" type="file" accept="image/*" capture="environment" /></label></div><small className="form-help">Mund të zgjedhësh disa foto nga telefoni ose të bësh një foto direkt me kamerën. Deri në 6 foto.</small></div>
       <label>Përshkrimi<textarea name="description" placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
-      <label>Qyteti<select name="location_city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label><label>Disponueshme deri<input name="available_until" type="datetime-local"/></label>
+      <label>Disponueshme deri<input name="available_until" type="datetime-local"/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><label>Afati i ushqimit<input name="food_best_before" type="datetime-local"/></label><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
       <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting}>{posting?"Po publikohet…":user?"Publiko falas":"Krijo llogari & publiko"}</button>
     </form></div></div>}
