@@ -361,7 +361,7 @@ function PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onC
   ]);const ids=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];const {data:rp}=ids.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",ids):{data:[] as any[]};const map=Object.fromEntries((rp||[]).map((x:any)=>[x.id,x]));const ls=(l.data||[]) as Listing[];if(ls.length){const {data:ims}=await supabase.from("dhuroje_listing_images").select("listing_id,storage_path,sort_order").in("listing_id",ls.map(x=>x.id)).order("sort_order");const first:Record<string,string>={};(ims||[]).forEach((im:any)=>{if(!first[im.listing_id])first[im.listing_id]=supabase.storage.from("dhuroje-listings").getPublicUrl(im.storage_path).data.publicUrl;});setPostImages(first);}setProfile(p.data);setReviews((r.data||[]).map((x:any)=>({...x,reviewer:map[x.reviewer_id]})));setPosts(ls);})()},[userId]);
   const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal profile-modal">
-    <div className="modal-head"><div><p className="eyebrow">DHURUESI</p><h2>{profile?.display_name||"Përdorues i regjistruar"}</h2><small>{profile?.created_at?"Anëtar që nga "+new Date(profile.created_at).toLocaleDateString("sq-AL"):""}</small></div><button className="close" onClick={onClose}>×</button></div>
+    <div className="modal-head"><div><p className="eyebrow">DHURUESI</p><h2>{profile?.display_name||"Përdorues i regjistruar"}</h2><div className="profile-meta">{profile?.city&&<span>📍 {profile.city}</span>}{profile?.age!=null&&<span>🎂 {profile.age} vjeç</span>}{profile?.created_at&&<span>Anëtar që nga {new Date(profile.created_at).toLocaleDateString("sq-AL")}</span>}</div></div><button className="close" onClick={onClose}>×</button></div>
     <div className="profile-stats"><div><b>{posts.length}</b><small>shpallje aktive</small></div><div><b>{reviews.length}</b><small>vlerësime</small></div><div><b>{avg?avg.toFixed(1):"—"}</b><small>⭐ mesatare</small></div></div>
     {onChat&&<button className="secondary full" onClick={onChat}>💬 Mesazho</button>}
     <div className="profile-posts"><h3>Shpalljet e këtij dhuruesi</h3>{posts.length?<div className="public-profile-posts">{posts.map(x=><button className="public-profile-post" key={x.id} onClick={()=>onListing?.(x,postImages[x.id])}><span className="public-profile-post-image">{postImages[x.id]?<img src={postImages[x.id]} alt=""/>:<span>{emoji(x.category)}</span>}</span><span><b>{x.title}</b><small>{categoryLabel[x.category]||x.category} · {x.location_name||"Pranë teje"}</small><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"}</small></span></button>)}</div>:<div className="empty">Ky dhurues nuk ka shpallje aktive.</div>}</div>
@@ -470,7 +470,7 @@ function Notifications({user,onClose,onChanged}:{user:any;onClose:()=>void;onCha
 }
 
 function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
-  const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[stats,setStats]=useState({active:0,given:0}),[name,setName]=useState(""),[saving,setSaving]=useState(false);
+  const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[stats,setStats]=useState({active:0,given:0}),[name,setName]=useState(""),[city,setCity]=useState(""),[age,setAge]=useState(""),[saving,setSaving]=useState(false);
   async function load(){
     const [p,r,l]=await Promise.all([
       supabase.from("dhuroje_profiles").select("*").eq("id",user.id).maybeSingle(),
@@ -480,16 +480,27 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
     const reviewerIds=[...new Set((r.data||[]).map((x:any)=>x.reviewer_id))];
     const {data:reviewerProfiles}=reviewerIds.length?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",reviewerIds):{data:[] as any[]};
     const rp=Object.fromEntries((reviewerProfiles||[]).map((x:any)=>[x.id,x]));
-    setProfile(p.data);setName(p.data?.display_name||"");setReviews((r.data||[]).map((x:any)=>({...x,reviewer:rp[x.reviewer_id]})));
+    setProfile(p.data);setName(p.data?.display_name||"");setCity(p.data?.city||"");setAge(p.data?.age!=null?String(p.data.age):"");setReviews((r.data||[]).map((x:any)=>({...x,reviewer:rp[x.reviewer_id]})));
     setStats({active:(l.data||[]).filter((x:any)=>x.status==="available").length,given:(l.data||[]).filter((x:any)=>x.status==="collected").length});
   }
   useEffect(()=>{load();},[user]);
-  async function save(e:FormEvent<HTMLFormElement>){e.preventDefault();setSaving(true);const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues"});if(error)alert(error.message);else{await load();onChanged();}setSaving(false);}
+  async function save(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();setSaving(true);
+    const cleanCity=city.trim().slice(0,80), parsedAge=age.trim()?Number(age):null;
+    if(parsedAge!==null&&(!Number.isInteger(parsedAge)||parsedAge<13||parsedAge>120)){alert("Mosha duhet të jetë 13–120.");setSaving(false);return;}
+    const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues",city:cleanCity||null,age:parsedAge});
+    if(error)alert(error.message);else{await load();onChanged();}setSaving(false);
+  }
   const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
     <div className="modal profile-modal">
-      <div className="modal-head"><div><p className="eyebrow">PROFILI IM</p><h2>{profile?.display_name||"Përdorues"}</h2><small>Anëtar që nga {profile?.created_at?new Date(profile.created_at).toLocaleDateString("sq-AL"):new Date(user.created_at).toLocaleDateString("sq-AL")}</small></div><button className="close" onClick={onClose}>×</button></div>
-      <form className="profile-form" onSubmit={save}><label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label><button className="secondary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj profilin"}</button></form>
+      <div className="modal-head"><div><p className="eyebrow">PROFILI IM</p><h2>{profile?.display_name||"Përdorues"}</h2><div className="profile-meta"><span>📍 {profile?.city||"Qyteti nuk është vendosur"}</span>{profile?.age!=null&&<span>🎂 {profile.age} vjeç</span>}<span>Anëtar që nga {profile?.created_at?new Date(profile.created_at).toLocaleDateString("sq-AL"):new Date(user.created_at).toLocaleDateString("sq-AL")}</span></div></div><button className="close" onClick={onClose}>×</button></div>
+      <form className="profile-form" onSubmit={save}>
+        <label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
+        <label>Qyteti<input value={city} onChange={e=>setCity(e.target.value)} maxLength={80} placeholder="p.sh. Ferizaj"/></label>
+        <label>Mosha <span className="form-help">opsionale</span><input value={age} onChange={e=>setAge(e.target.value.replace(/[^0-9]/g,"").slice(0,3))} inputMode="numeric" type="text" maxLength={3} placeholder="p.sh. 28"/></label>
+        <button className="secondary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj profilin"}</button>
+      </form>
       <div className="profile-stats"><div><b>{stats.active}</b><small>aktive</small></div><div><b>{stats.given}</b><small>të dhuruara</small></div><div><b>{avg?avg.toFixed(1):"—"}</b><small>⭐ {reviews.length} vlerësime</small></div></div>
       <div className="profile-reviews"><h3>Vlerësimet</h3>{reviews.length?reviews.map(r=><div className="review-row" key={r.id}><div><b>{r.reviewer?.display_name||"Përdorues"}</b><span>{"★".repeat(r.rating)}{"☆".repeat(5-r.rating)}</span></div><p>{r.comment||"Pa koment."}</p><small>{new Date(r.created_at).toLocaleDateString("sq-AL")}</small></div>):<div className="empty">Nuk ke marrë ende vlerësime. Pas një marrjeje të përfunduar, mund të vlerësoheni nga njëri-tjetri.</div>}</div>
     </div>
