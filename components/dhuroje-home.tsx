@@ -295,6 +295,7 @@ export default function DhurojeHome(){
   async function startChat(listing:Listing,targetUserId?:string){
     const currentUser=await requireAuthenticatedUser();
     if(!currentUser)return;
+
     let otherUserId=targetUserId;
     if(listing.owner_id!==currentUser.id){
       otherUserId=listing.owner_id;
@@ -304,56 +305,43 @@ export default function DhurojeHome(){
       navigatePage("messages");
       return;
     }
-    if(otherUserId===currentUser.id){
+
+    if(!otherUserId||otherUserId===currentUser.id){
       setError("Nuk mund të hapësh bisedë me veten.");
       setShowMessages(true);
       navigatePage("messages");
       return;
     }
-    const existingMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",currentUser.id);
-    if(existingMember.error){
-      setError("Nuk mund të kontrollohen bisedat. Provo përsëri.");
-      setShowMessages(true);navigatePage("messages");return;
-    }
-    let cid:string|undefined;
-    const memberIds=(existingMember.data||[]).map((x:any)=>x.conversation_id);
-    if(memberIds.length){
-      const targetMember=await supabase.from("dhuroje_conversation_members").select("conversation_id").in("conversation_id",memberIds).eq("user_id",otherUserId);
-      if(targetMember.error){
-        setError("Nuk mund të hapet biseda. Provo përsëri.");
-        setShowMessages(true);navigatePage("messages");return;
-      }
-      const pairIds=(targetMember.data||[]).map((x:any)=>x.conversation_id);
-      if(pairIds.length){
-        const existingConversation=await supabase.from("dhuroje_conversations").select("id").in("id",pairIds).eq("listing_id",listing.id).limit(1).maybeSingle();
-        if(existingConversation.error){
-          setError("Nuk mund të kontrollohet biseda. Provo përsëri.");
-          setShowMessages(true);navigatePage("messages");return;
-        }
-        cid=existingConversation.data?.id;
-      }
-    }
-    if(!cid){
-      cid=crypto.randomUUID();
-      const {error:e}=await supabase.from("dhuroje_conversations").insert({id:cid,listing_id:listing.id});
-      if(e){
-        setError("Biseda nuk u krijua. Provo përsëri.");
-        setShowMessages(true);navigatePage("messages");return;
-      }
-      const {error:me}=await supabase.from("dhuroje_conversation_members").insert([
-        {conversation_id:cid,user_id:currentUser.id},
-        {conversation_id:cid,user_id:otherUserId}
-      ]);
-      if(me){
-        await supabase.from("dhuroje_conversations").delete().eq("id",cid);
-        setError("Biseda nuk u krijua. Provo përsëri.");
-        setShowMessages(true);navigatePage("messages");return;
-      }
-    }
+
     setError("");
-    setMessageConversationId(cid);
+    const {data:conversationId,error:e}=await supabase.rpc("dhuroje_get_or_create_conversation",{
+      p_listing_id:listing.id,
+      p_other_user_id:otherUserId
+    });
+
+    if(e||!conversationId){
+      setShowMessages(true);
+      setMessageConversationId("");
+      navigatePage("messages");
+      setError(e?.message||"Biseda nuk u krijua. Provo përsëri.");
+      return;
+    }
+
+    // The URL is the source of truth for the conversation opened from a listing.
+    // Close the listing overlay before opening the inbox so two pages cannot stack.
+    setActiveListing(null);
+    setEditingListing(null);
+    setPublicProfileId(null);
+    setShowDashboard(false);
+    setShowProfile(false);
+    setShowNotifications(false);
+    setShowGive(false);
+    setShowAuth(false);
+    setPostChoice(false);
+    setPostAuth(false);
+    setMessageConversationId(conversationId);
     setShowMessages(true);
-    navigatePage("messages",undefined,cid);
+    navigatePage("messages",undefined,conversationId);
   }
   function openPosting(){
     setError("");
@@ -607,14 +595,24 @@ function Messages({user,onClose,initialConversationId,initialError}:{user:any;on
     const ids=(members||[]).map((x:any)=>x.conversation_id);
     if(!ids.length){setConversations([]);setMessages([]);setSelectedConversation("");setLoading(false);return;}
 
-    const {data:cs}=await supabase.from("dhuroje_conversations").select("id,listing_id,created_at").in("id",ids);
+    const {data:cs,error:conversationError}=await supabase.from("dhuroje_conversations").select("id,listing_id,created_at").in("id",ids);
+    if(conversationError){
+      setError("Nuk mund të ngarkoheshin bisedat. Provo përsëri.");
+      setLoading(false);
+      return;
+    }
     const rows=cs||[];
     const listingIds=rows.map((x:any)=>x.listing_id).filter(Boolean);
     const {data:listingsData}=listingIds.length?await supabase.from("dhuroje_listings").select("id,title,owner_id,location_name,status").in("id",listingIds):{data:[] as any[]};
     const {data:allMembers}=await supabase.from("dhuroje_conversation_members").select("conversation_id,user_id").in("conversation_id",ids);
     const otherIds=[...new Set((allMembers||[]).filter((m:any)=>m.user_id!==user.id).map((m:any)=>m.user_id))];
     const {data:profiles}=otherIds.length?await supabase.from("dhuroje_profiles").select("id,display_name,avatar_url").in("id",otherIds):{data:[] as any[]};
-    const {data:ms}=await supabase.from("dhuroje_messages").select("*").in("conversation_id",ids).order("created_at",{ascending:true});
+    const {data:ms,error:messageError}=await supabase.from("dhuroje_messages").select("*").in("conversation_id",ids).order("created_at",{ascending:true});
+    if(messageError){
+      setError("Nuk mund të ngarkoheshin mesazhet. Provo përsëri.");
+      setLoading(false);
+      return;
+    }
 
     const listingMap=Object.fromEntries((listingsData||[]).map((x:any)=>[x.id,x]));
     const profileMap=Object.fromEntries((profiles||[]).map((x:any)=>[x.id,x]));
@@ -657,6 +655,13 @@ function Messages({user,onClose,initialConversationId,initialError}:{user:any;on
     return()=>{supabase.removeChannel(ch);};
   },[user]);
 
+  useEffect(()=>{
+    if(initialConversationId){
+      setSelectedConversation(initialConversationId);
+      setMobileChat(true);
+    }
+  },[initialConversationId]);
+
   const selectedMessages=messages.filter(m=>m.conversation_id===selectedConversation);
   const selected=conversations.find(c=>c.id===selectedConversation);
   const visibleConversations=conversations.filter(c=>{
@@ -669,10 +674,24 @@ function Messages({user,onClose,initialConversationId,initialError}:{user:any;on
     const text=body.trim();
     if(!selectedConversation||!text||sending)return;
     if(text.length>2000){setError("Mesazhi mund të ketë maksimum 2000 karaktere.");return;}
-    setSending(true);setError("");
-    const {error:e}=await supabase.from("dhuroje_messages").insert({conversation_id:selectedConversation,sender_id:user.id,body:text});
-    if(e)setError("Mesazhi nuk u dërgua. Provo përsëri.");
-    else{setBody("");await load();}
+    setSending(true);
+    setError("");
+
+    const {error:e}=await supabase.from("dhuroje_messages").insert({
+      conversation_id:selectedConversation,
+      sender_id:user.id,
+      body:text
+    });
+
+    if(e){
+      setError(e.message?.includes("infinite recursion")
+        ? "Ka një problem me lejet e bisedës. Rifresko faqen dhe provo përsëri."
+        : "Mesazhi nuk u dërgua. Provo përsëri.");
+    }else{
+      setBody("");
+      // Optimistic refresh: the realtime listener will also update other clients.
+      await load();
+    }
     setSending(false);
   }
 
