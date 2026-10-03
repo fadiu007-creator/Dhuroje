@@ -33,7 +33,7 @@ export default function DhurojeHome(){
   const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
   const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
   const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
-  const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
+  const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
   const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[foodFilter,setFoodFilter]=useState<"all"|"sealed"|"opened"|"refrigerated">("all");
@@ -153,10 +153,10 @@ export default function DhurojeHome(){
       if(pendingPost){
         if(!result.data.session){setError("Llogaria u krijua. Nëse kërkohet konfirmim email-i, konfirmoje dhe pastaj publikoje përsëri.");return;}
         setPosting(true);
-        const ok=await finishListing(result.data.user,pendingPost);
+        const created=await finishListing(result.data.user,pendingPost);
         setPosting(false);
         setPendingPost(null);
-        if(ok){setShowAuth(false);setShowGive(false);setPostAuth(false);navigatePage("home");await load();return;}
+        if(created){setShowAuth(false);setShowGive(false);setPostAuth(false);await load();navigatePage("listing",created.id);return;}
       }
     }
     setShowAuth(false);
@@ -194,33 +194,39 @@ export default function DhurojeHome(){
     if(e){setError(e.message);return;}
     setClaims(x=>[...x,id]);
   }
-  async function finishListing(postingUser:any,f:FormData){
-    const files=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
-    if(!files.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return false;}
+  async function finishListing(postingUser:any,f:FormData,filesOverride?:File[]){
+    const files=filesOverride?.length?filesOverride:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
+    if(!files.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return null;}
     const {data:item,error:e1}=await supabase.from("dhuroje_listings").insert({
       owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
       category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:String(f.get("city")||listingCity||profile?.city||location),
       latitude:coords?.lat??null,longitude:coords?.lon??null,
       food_refrigerated:categoryDb[String(f.get("category"))]==="food"&&f.get("food_refrigerated")==="on",food_opened:categoryDb[String(f.get("category"))]==="food"&&f.get("food_opened")==="on"
     }).select("*").single();
-    if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return false;}
+    if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return null;}
     for(let i=0;i<Math.min(files.length,6);i++){
       const file=files[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg",path=postingUser.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
       const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
       if(!up.error)await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
     }
-    return true;
+    return item as Listing;
   }
   async function createListing(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget);
-    const selectedPhotos=Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
+    const selectedPhotos=selectedPhotoFiles.length?selectedPhotoFiles:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
     if(!selectedPhotos.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return;}
     setPosting(true);
     if(!user){setError("Hyr ose krijo një llogari para se të publikosh.");setPosting(false);return;}
-    const ok=await finishListing(user,f);
+    const created=await finishListing(user,f,selectedPhotos);
     setPosting(false);
-    if(ok){setShowGive(false);await load();}
+    if(created){
+      setShowGive(false);
+      setPhotoError(false);
+      setSelectedPhotoFiles([]);
+      await load();
+      navigatePage("listing",created.id);
+    }
   }
   async function deleteListing(listing:Listing){
     const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
@@ -293,6 +299,7 @@ export default function DhurojeHome(){
     setError("");
     setPhotoError(false);
     setPhotoPreviews([]);
+    setSelectedPhotoFiles([]);
     setPostingCategory("Ushqim");
     if(user){setPostChoice(false);setShowGive(true);navigatePage("post");return;}
     setPostChoice(true);setShowGive(false);navigatePage("post-choice");
@@ -345,7 +352,7 @@ export default function DhurojeHome(){
 
     {showGive&&<div className="route-shell"><div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&goHome()}><form className="modal" onSubmit={createListing}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Posto diçka falas</h2></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select><small className="form-help">Parazgjedhur nga qyteti i profilit. Mund ta ndryshosh për këtë shpallje.</small></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);if(files.length){setPhotoError(false);setError("");setPhotoPreviews(files.map(f=>URL.createObjectURL(f)));}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Të paktën 1 foto është e detyrueshme. Mund të shtosh deri në 6 foto.</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0);if(files.length){const next=[...selectedPhotoFiles,...files].slice(0,6);setPhotoError(false);setError("");setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));e.currentTarget.value="";}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Të paktën 1 foto është e detyrueshme. Mund të shtosh deri në 6 foto.</small></div>
       <label>Përshkrimi<textarea name="description" placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
       <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting}>{posting?"Po publikohet…":user?"Publiko falas":"Krijo llogari & publiko"}</button>
