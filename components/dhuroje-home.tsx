@@ -197,6 +197,8 @@ export default function DhurojeHome(){
   async function finishListing(postingUser:any,f:FormData,filesOverride?:File[]){
     const files=filesOverride?.length?filesOverride:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
     if(!files.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return null;}
+    // Never create the listing until at least one selected photo is actually ready.
+    if(files.length!==photoPreviews.length || photoPreviews.length<1){setPhotoError(true);setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");return null;}
     const {data:item,error:e1}=await supabase.from("dhuroje_listings").insert({
       owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
       category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:String(f.get("city")||listingCity||profile?.city||location),
@@ -204,18 +206,23 @@ export default function DhurojeHome(){
       food_refrigerated:categoryDb[String(f.get("category"))]==="food"&&f.get("food_refrigerated")==="on",food_opened:categoryDb[String(f.get("category"))]==="food"&&f.get("food_opened")==="on"
     }).select("*").single();
     if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return null;}
+    let uploaded=0;
     for(let i=0;i<Math.min(files.length,6);i++){
       const file=files[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg",path=postingUser.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
       const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
-      if(!up.error)await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
+      if(up.error){setError("Fotoja nuk u ngarkua. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
+      const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
+      if(imageError){await supabase.storage.from("dhuroje-listings").remove([path]);setError("Fotoja nuk u ruajt. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
+      uploaded++;
     }
+    if(uploaded<1){setPhotoError(true);setError("Prit derisa të paktën një foto të jetë gati.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
     return item as Listing;
   }
   async function createListing(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
     const f=new FormData(e.currentTarget);
     const selectedPhotos=selectedPhotoFiles.length?selectedPhotoFiles:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
-    if(!selectedPhotos.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return;}
+    if(!selectedPhotos.length || selectedPhotos.length!==photoPreviews.length){setPhotoError(true);setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");return;}
     setPosting(true);
     if(!user){setError("Hyr ose krijo një llogari para se të publikosh.");setPosting(false);return;}
     const created=await finishListing(user,f,selectedPhotos);
@@ -355,7 +362,7 @@ export default function DhurojeHome(){
       <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0);if(files.length){const next=[...selectedPhotoFiles,...files].slice(0,6);setPhotoError(false);setError("");setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));e.currentTarget.value="";}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Shto minimum 1 foto , maksimum 6 foto.</small></div>
       <label>Përshkrimi<textarea name="description" placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
-      <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting}>{posting?"Po publikohet…":user?"Publiko falas":"Krijo llogari & publiko"}</button>
+      <div className="food-note">📍 {location}. Lejo lokacionin para publikimit nëse dëshiron që shpallja të renditet pranë teje.</div><button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
     </form></div></div>}
 
     {activeListing&&<div className="page-screen"><ListingDetail listing={activeListing} image={images[activeListing.id]?.[0]} saved={favorites.includes(activeListing.id)} claimed={claims.includes(activeListing.id)} isOwner={user?.id===activeListing.owner_id} onClose={goHome} onClaim={()=>claim(activeListing.id)} onSave={()=>toggleFavorite(activeListing.id)} onChat={()=>startChat(activeListing)} onEdit={()=>quickEditListing(activeListing)} onMarkGiven={()=>markAsGiven(activeListing)} onDelete={()=>deleteListing(activeListing)} onProfile={()=>{setPublicProfileId(activeListing.owner_id);navigatePage("profile",activeListing.owner_id)}}/></div>}
