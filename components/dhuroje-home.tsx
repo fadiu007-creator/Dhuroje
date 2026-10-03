@@ -106,10 +106,10 @@ export default function DhurojeHome(){
     }else if(p==="saved"){
       setFavoritesOnly(true);setActiveListing(null);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);
     }else if(p==="me"){
-      setShowProfile(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowNotifications(false);
+      setShowProfile(true);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);
     }else if(p==="post"){
       if(user){setShowGive(true);setPostChoice(false);setShowAuth(false);}else{setShowGive(false);setPostChoice(true);setShowAuth(false);}
-      setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
+      setFavoritesOnly(false);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
     }else if(p==="post-choice"){
       setPostChoice(true);setShowGive(false);setShowAuth(false);setFavoritesOnly(false);
     }else if(p==="auth"){
@@ -117,7 +117,7 @@ export default function DhurojeHome(){
       setShowAuth(true);setAuthMode(authKind.endsWith("signup")?"signup":"login");setPostAuth(authKind.startsWith("post-"));setPostChoice(false);setShowGive(false);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);
     }else if(p==="edit"&&pageRoute.id){
       const found=listings.find(x=>x.id===pageRoute.id);
-      if(found){setEditingListing(found);setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);}
+      if(found){setEditingListing(found);setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setPostAuth(false);}
     }
   },[pageRoute,listings,user]);
 
