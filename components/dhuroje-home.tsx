@@ -636,12 +636,17 @@ function Messages({user,onClose,initialConversationId,initialError}:{user:any;on
     });
 
     setConversations(enriched);setMessages(ms||[]);
+    const requestedConversation=initialConversationId||"";
+    const requestedExists=requestedConversation ? enriched.some(c=>c.id===requestedConversation) : false;
     setSelectedConversation(current=>{
-      if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))return initialConversationId;
+      if(requestedConversation) return requestedExists ? requestedConversation : "";
       if(current&&enriched.some(c=>c.id===current))return current;
       return enriched[0]?.id||"";
     });
-    if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))setMobileChat(true);
+    if(requestedConversation){
+      setMobileChat(requestedExists);
+      if(!requestedExists)setError("Kjo bisedë nuk është më e disponueshme ose nuk ke qasje në të.");
+    }
     setLoading(false);
   }
 
@@ -698,7 +703,12 @@ function Messages({user,onClose,initialConversationId,initialError}:{user:any;on
   function time(v:string){return new Date(v).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"});}
   function day(v:string){return new Date(v).toLocaleDateString("sq-AL",{day:"2-digit",month:"long",year:"numeric"});}
   function initials(name:string){return (name||"P").trim().split(/\\s+/).slice(0,2).map((x:string)=>x[0]).join("").toUpperCase();}
-  function selectConversation(id:string){setSelectedConversation(id);setMobileChat(true);setError("");}
+  function selectConversation(id:string){
+    setSelectedConversation(id);setMobileChat(true);setError("");
+    const p=new URLSearchParams(window.location.search);
+    p.set("page","messages");p.set("conversation",id);
+    window.history.pushState({page:"messages",conversation:id},"",window.location.pathname+"?"+p.toString());
+  }
 
   return <div className="page-content messages-page">
     <div className="messages-topbar">
