@@ -291,6 +291,7 @@ export default function DhurojeHome(){
   }
   function openPosting(){
     setError("");
+    setPhotoError(false);
     setPostingCategory("Ushqim");
     if(user){setPostChoice(false);setShowGive(true);navigatePage("post");return;}
     setPostChoice(true);setShowGive(false);navigatePage("post-choice");
