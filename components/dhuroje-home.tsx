@@ -331,7 +331,7 @@ export default function DhurojeHome(){
     <section className="categories">{categories.map(x=><button key={x} className={category===x?"chip active":"chip"} onClick={()=>setCategory(x)}><span className="chip-icon">{x==="Të gjitha"?"✨":x==="Ushqim"?"🥖":x==="Veshmbathje"?"👕":x==="Shtëpi"?"🪑":x==="Elektronikë"?"📱":x==="Fëmijë"?"🧸":x==="Libra"?"📚":"🎁"}</span><span>{x}</span></button>)}</section>
     <section className="search-filters">
       <button className={showFilters?"filter-pill active":"filter-pill"} onClick={()=>setShowFilters(x=>!x)}>⚙️ Filtrat</button>
-      {filterCity&&<button className="filter-pill active" onClick={()=>setFilterCity(""))}>📍 {filterCity} ×</button>}
+      {filterCity&&<button className="filter-pill active" onClick={()=>setFilterCity("")}>📍 {filterCity} ×</button>}
       {foodOnly&&<button className="filter-pill active" onClick={()=>setFoodOnly(false)}>🥖 Ushqim ×</button>}
       {photoOnly&&<button className="filter-pill active" onClick={()=>setPhotoOnly(false)}>📷 Me foto ×</button>}
       {nearbyOnly&&<button className="filter-pill active" onClick={()=>setNearbyOnly(false)}>📍 25 km ×</button>}
