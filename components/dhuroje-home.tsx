@@ -516,10 +516,9 @@ function ReviewModal({user,targetId,listingId,listingTitle,onClose,onSaved}:{use
 function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>void;initialConversationId?:string}){
   const [conversations,setConversations]=useState<any[]>([]);
   const [messages,setMessages]=useState<any[]>([]);
-  const [selectedConversation,setSelectedConversation]=useState<string>("");
+  const [selectedConversation,setSelectedConversation]=useState<string>(initialConversationId||"");
   const [body,setBody]=useState("");
   const [loading,setLoading]=useState(true);
-  const [targetConversation,setTargetConversation]=useState<string>(initialConversationId||"");
 
   async function load(){
     if(!user)return;
@@ -544,8 +543,8 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
       .select("id,listing_id,created_at")
       .in("id",ids)
       .order("created_at",{ascending:false});
-
     const rows=cs||[];
+
     const listingIds=rows.map((x:any)=>x.listing_id).filter(Boolean);
     const {data:listingsData}=listingIds.length
       ?await supabase.from("dhuroje_listings").select("id,title,owner_id").in("id",listingIds)
@@ -563,6 +562,12 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
       ?await supabase.from("dhuroje_profiles").select("id,display_name").in("id",[...new Set(otherIds)])
       :{data:[] as any[]};
 
+    const {data:ms}=await supabase
+      .from("dhuroje_messages")
+      .select("*")
+      .in("conversation_id",ids)
+      .order("created_at",{ascending:true});
+
     const listingMap=Object.fromEntries((listingsData||[]).map((x:any)=>[x.id,x]));
     const profileMap=Object.fromEntries((profiles||[]).map((x:any)=>[x.id,x]));
     const otherByConversation:Record<string,string>={};
@@ -570,36 +575,32 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
       if(m.user_id!==user.id)otherByConversation[m.conversation_id]=m.user_id;
     });
 
-    const {data:ms}=await supabase
-      .from("dhuroje_messages")
-      .select("*")
-      .in("conversation_id",ids)
-      .order("created_at",{ascending:true});
-    const sentOrReceivedIds=new Set((ms||[]).map((m:any)=>m.conversation_id));
+    const lastMessageByConversation:Record<string,any>={};
+    (ms||[]).forEach((m:any)=>{lastMessageByConversation[m.conversation_id]=m;});
 
-    // Only show conversations where an actual message has been sent or received.
+    // Only show people where an actual message exists. Each row is a person, not a dropdown.
     const enriched=rows
-      .filter((c:any)=>sentOrReceivedIds.has(c.id))
+      .filter((c:any)=>lastMessageByConversation[c.id])
       .map((c:any)=>({
         ...c,
         listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
         otherUserId:otherByConversation[c.id],
-        otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues"
-      }));
+        otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues",
+        lastMessage:lastMessageByConversation[c.id]
+      }))
+      .sort((a:any,b:any)=>new Date(b.lastMessage.created_at).getTime()-new Date(a.lastMessage.created_at).getTime());
+
     setConversations(enriched);
     setMessages(ms||[]);
-
     setSelectedConversation(current=>{
-      const preferred=initialConversationId&&enriched.some(c=>c.id===initialConversationId)?initialConversationId:"";
-      if(preferred)return preferred;
+      if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))return initialConversationId;
       if(current&&enriched.some(c=>c.id===current))return current;
       return enriched[0]?.id||"";
     });
-    if(initialConversationId&&enriched.some(c=>c.id===initialConversationId))setTargetConversation(initialConversationId);
     setLoading(false);
   }
 
-  useEffect(()=>{load();},[user]);
+  useEffect(()=>{load();},[user,initialConversationId]);
 
   useEffect(()=>{
     if(!user)return;
@@ -627,38 +628,54 @@ function Messages({user,onClose,initialConversationId}:{user:any;onClose:()=>voi
     }
   }
 
-  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
-    <div className="modal messages-modal">
-      <div className="modal-head">
-        <div><p className="eyebrow">MESAZHET</p><h2>Mesazhet</h2></div>
-        <button className="close" onClick={onClose}>×</button>
+  return <div className="page-content messages-page">
+    <div className="account-page-top">
+      <div>
+        <p className="eyebrow">MESAZHET</p>
+        <h1>Mesazhet</h1>
+        <p className="account-email">Bisedat e tua</p>
       </div>
+      <button className="close account-close" onClick={onClose} aria-label="Mbyll">×</button>
+    </div>
 
-      {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
-        <div className="empty">Nuk ke ende mesazhe.</div>:
-        <>
-          {!targetConversation&&<label className="message-context">
-            <span>Postimi / kërkesa</span>
-            <select value={selectedConversation} onChange={e=>setSelectedConversation(e.target.value)}>
-              {conversations.map(c=><option key={c.id} value={c.id}>{c.otherName} · {c.listingTitle}</option>)}
-            </select>
-          </label>}
-          {targetConversation&&selected&&<div className="message-person"><span>👤</span><div><b>{selected.otherName}</b><small>{selected.listingTitle}</small></div></div>}
+    {loading?<div className="empty">Po ngarkohen mesazhet…</div>:!conversations.length?
+      <div className="empty">Nuk ke ende mesazhe.</div>:
+      <div className="messages-layout">
+        <div className="conversation-list">
+          <h3>Personat me të cilët ke folur</h3>
+          {conversations.map(c=>{
+            const active=c.id===selectedConversation;
+            return <button key={c.id} className={"conversation-user"+(active?" active":"")} onClick={()=>setSelectedConversation(c.id)}>
+              <span className="conversation-avatar">{(c.otherName||"P").slice(0,1).toUpperCase()}</span>
+              <span className="conversation-user-text">
+                <b>{c.otherName}</b>
+                <small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||c.listingTitle}</small>
+              </span>
+              <span className="conversation-time">{c.lastMessage?.created_at?new Date(c.lastMessage.created_at).toLocaleDateString("sq-AL",{day:"2-digit",month:"2-digit"}):""}</span>
+            </button>;
+          })}
+        </div>
+
+        {selected&&<div className="chat-panel">
+          <div className="message-person">
+            <span className="conversation-avatar">{(selected.otherName||"P").slice(0,1).toUpperCase()}</span>
+            <div><b>{selected.otherName}</b><small>{selected.listingTitle}</small></div>
+          </div>
 
           <div className="chat-messages">
             {selectedMessages.length?selectedMessages.map(m=><div className={m.sender_id===user.id?"bubble mine":"bubble"} key={m.id}>
               {m.body}
               <small>{new Date(m.created_at).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"})}</small>
-            </div>):<div className="empty">Nuk ka ende mesazhe për këtë kërkesë.</div>}
+            </div>):<div className="empty">Nuk ka ende mesazhe.</div>}
           </div>
 
           <div className="composer">
-            <input value={body} onChange={e=>setBody(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={"Shkruaj për "+(selected?.otherName||"përdoruesin")+"…"} />
+            <input value={body} onChange={e=>setBody(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={"Shkruaj për "+selected.otherName+"…"} />
             <button className="primary" onClick={send}>Dërgo</button>
           </div>
-        </>
-      }
-    </div>
+        </div>}
+      </div>
+    }
   </div>;
 }
 function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested,profile}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void;profile:any}){
