@@ -480,17 +480,20 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
   .message-row .bubble{max-width:82%}
 }
 
-/* Persistent app chrome on every routed page */
-.topbar{position:sticky!important;top:0!important;z-index:1101!important}
-.bottom-nav{z-index:1101!important}
-.page-screen{padding-top:76px!important;padding-bottom:70px!important}
-.route-shell{padding-top:76px!important;padding-bottom:70px!important}
-.page-screen>.page-content{min-height:calc(100dvh - 146px)!important;padding-bottom:28px!important}
-.route-shell>.modal-backdrop{min-height:calc(100dvh - 146px)!important}
+
+
+/* App chrome is fixed above every routed page/overlay. */
+.topbar{position:fixed!important;top:0!important;left:0!important;right:0!important;width:100%!important;z-index:10000!important}
+.bottom-nav{position:fixed!important;left:0!important;right:0!important;bottom:0!important;width:100%!important;z-index:10000!important}
+.page-screen{padding-top:76px!important;padding-bottom:76px!important;z-index:1000!important}
+.page-screen>.page-content{min-height:calc(100dvh - 152px)!important;padding-bottom:28px!important}
+.route-shell{padding-top:76px!important;padding-bottom:76px!important;z-index:1000!important}
+.saved-page{max-width:1100px!important}
+.saved-empty{min-height:55vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 20px}
+.saved-empty h2{margin:10px 0 6px}.saved-empty p{max-width:420px;margin:0 0 22px;color:#667085}
 @media(max-width:560px){
-  .topbar{height:60px!important}
-  .page-screen{padding-top:60px!important;padding-bottom:64px!important}
-  .route-shell{padding-top:60px!important;padding-bottom:64px!important}
-  .page-screen>.page-content{min-height:calc(100dvh - 124px)!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:20px!important}
-  .route-shell>.modal-backdrop{min-height:calc(100dvh - 124px)!important}
+ .topbar{height:60px!important}
+ .page-screen{padding-top:60px!important;padding-bottom:68px!important}
+ .page-screen>.page-content{min-height:calc(100dvh - 128px)!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:20px!important}
+ .route-shell{padding-top:60px!important;padding-bottom:68px!important}
 }
