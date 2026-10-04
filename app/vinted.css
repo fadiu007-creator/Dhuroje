@@ -221,3 +221,10 @@ body{font-size:14px!important}
   .messages-workspace .chat-messages{padding:18px 11px!important}
   .message-row .bubble{max-width:84%!important}
 }
+
+
+/* Messaging action errors must remain visible above full-screen routes. */
+.app-error-toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:10000;display:flex;align-items:center;gap:10px;max-width:min(720px,calc(100vw - 28px));padding:12px 14px;border:1px solid #f0b8b8;border-radius:12px;background:#fff7f7;color:#8f1d1d;box-shadow:0 12px 32px rgba(0,0,0,.14);font-size:14px;font-weight:600}
+.app-error-toast span:nth-child(2){flex:1}
+.app-error-toast button{border:0;background:transparent;color:inherit;font-size:22px;line-height:1;cursor:pointer;padding:2px 4px}
+@media(max-width:760px){.app-error-toast{top:10px;font-size:13px}}
