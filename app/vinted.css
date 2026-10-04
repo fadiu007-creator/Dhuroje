@@ -389,3 +389,87 @@ body{font-size:14px!important}
   .bottom-nav{height:60px!important;border-radius:0!important}
   .geev-brand{font-size:24px!important}
 }
+
+/* Final Geev-inspired mobile navigation polish */
+@media(max-width:620px){
+  .bottom-nav{
+    height:72px!important;
+    padding:5px 7px calc(5px + env(safe-area-inset-bottom))!important;
+    gap:2px!important;
+    background:rgba(255,255,255,.98)!important;
+    border-top:1px solid #e2e9e5!important;
+    box-shadow:0 -6px 22px rgba(22,55,39,.08)!important;
+    display:flex!important;
+    align-items:stretch!important;
+  }
+  .bottom-nav button{
+    height:62px!important;
+    min-width:0!important;
+    padding:3px 2px 1px!important;
+    gap:2px!important;
+    color:#7a837f!important;
+    font-size:10px!important;
+    font-weight:650!important;
+    border-radius:12px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    transition:color .15s ease,background .15s ease,transform .15s ease!important;
+  }
+  .bottom-nav button:active{transform:scale(.95)!important}
+  .bottom-nav .nav-icon{
+    width:31px!important;
+    height:31px!important;
+    display:grid!important;
+    place-items:center!important;
+    margin-bottom:1px!important;
+  }
+  .bottom-nav .nav-icon svg{
+    width:28px!important;
+    height:28px!important;
+    fill:none!important;
+    stroke:currentColor!important;
+    stroke-width:1.8!important;
+    stroke-linecap:round!important;
+    stroke-linejoin:round!important;
+  }
+  .bottom-nav button span:last-child{
+    font-size:10px!important;
+    line-height:12px!important;
+    font-weight:700!important;
+  }
+  .bottom-nav .nav-active{
+    color:var(--v-green)!important;
+    background:#f0f7f3!important;
+  }
+  .bottom-nav .nav-active .nav-icon svg{stroke-width:2.15!important}
+  .bottom-nav .nav-add{
+    width:58px!important;
+    min-width:58px!important;
+    height:58px!important;
+    flex:0 0 58px!important;
+    align-self:center!important;
+    margin:0 3px!important;
+    padding:0!important;
+    border-radius:18px!important;
+    background:var(--v-green)!important;
+    color:#fff!important;
+    box-shadow:0 5px 13px rgba(31,105,70,.25)!important;
+  }
+  .bottom-nav .nav-add span{
+    width:100%!important;
+    height:100%!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+  .bottom-nav .nav-add svg{
+    width:30px!important;
+    height:30px!important;
+    fill:none!important;
+    stroke:currentColor!important;
+    stroke-width:2.2!important;
+    stroke-linecap:round!important;
+  }
+  .bottom-nav .nav-add span:last-child{display:none!important}
+}
