@@ -19,13 +19,33 @@ const categoryLabel:Record<string,string>={food:"Ushqim",clothing:"Veshmbathje",
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
 
 async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promise<File|null>{
-  if(!file.type.startsWith("image/"))return null;
+  if(!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name))return null;
   if(file.size>15*1024*1024)throw new Error("Fotoja origjinale duhet të jetë maksimumi 15 MB.");
-  const bitmap=await withTimeout(
-    createImageBitmap(file),
-    10000,
-    "Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël."
-  );
+
+  let source:Blob=file;
+  const isHeic=/\.(heic|heif)$/i.test(file.name)||/image\/(heic|heif)/i.test(file.type);
+  if(isHeic){
+    try{
+      const mod=await import("heic2any");
+      const convert=(mod as any).default||mod;
+      const converted=await convert({blob:file,toType:"image/jpeg",quality:.88});
+      source=Array.isArray(converted)?converted[0]:converted;
+    }catch(err){
+      throw new Error("Ky format HEIC/HEIF nuk mund të lexohet. Ruaje foton si JPG dhe provo përsëri.");
+    }
+  }
+
+  let bitmap:ImageBitmap;
+  try{
+    bitmap=await withTimeout(
+      createImageBitmap(source),
+      10000,
+      "Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël."
+    );
+  }catch{
+    throw new Error("Fotoja nuk mund të lexohej. Provo JPG, PNG ose WebP.");
+  }
+
   const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
   const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
   const canvas=document.createElement("canvas");
@@ -34,20 +54,23 @@ async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promi
   if(!ctx){bitmap.close();throw new Error("Nuk mund të përpunohej fotoja.");}
   ctx.drawImage(bitmap,0,0,width,height);
   bitmap.close();
+
   const makeBlob=(type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
   let blob:Blob|null=null;
-  for(const quality of [0.82,0.74,0.66,0.58,0.50,0.42]){
+  for(const quality of [.82,.74,.66,.58,.50,.42]){
     blob=await makeBlob("image/webp",quality);
     if(blob&&blob.size<=maxBytes)break;
   }
   if(!blob||blob.size>maxBytes){
-    for(const quality of [0.75,0.65,0.55]){
+    for(const quality of [.75,.65,.55]){
       blob=await makeBlob("image/jpeg",quality);
       if(blob&&blob.size<=maxBytes)break;
     }
   }
   if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej nën 500 KB.");
-  const type=blob.type||"image/webp";const ext=type==="image/jpeg"?"jpg":"webp";return new File([blob],"photo."+ext,{type,lastModified:Date.now()});
+  const type=blob.type||"image/webp";
+  const ext=type==="image/jpeg"?"jpg":"webp";
+  return new File([blob],"photo."+ext,{type,lastModified:Date.now()});
 }
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
