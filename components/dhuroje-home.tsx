@@ -505,7 +505,7 @@ export default function DhurojeHome(){
     {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
     {showDashboard&&<div className="page-screen"><Dashboard user={user} profile={profile} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven} onProfile={openProfile} onMessages={()=>{setShowMessages(true);navigatePage("messages")}} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id)}} onSaved={()=>{setFavoritesOnly(true);navigatePage("saved")}} onRequested={()=>navigatePage("dashboard")}/></div>}
-    <nav className="bottom-nav" aria-label="Navigimi kryesor"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}><span className="nav-icon" aria-hidden="true">🏠</span><span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(true);setMapMode(false);navigatePage("saved");}}}><span className="nav-icon" aria-hidden="true">♡</span><span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add" aria-label="Dhuro një gjë"><span aria-hidden="true">＋</span></button><button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}><span className="nav-icon" aria-hidden="true">💬</span><span>Mesazhet</span></button><button onClick={()=>setShowMenu(!showMenu)}><span className="nav-icon" aria-hidden="true">👤</span><span>Profili</span></button></nav>
+    <nav className="bottom-nav" aria-label="Navigimi kryesor"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}><span className="nav-icon" aria-hidden="true">🏠</span><span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(true);setMapMode(false);navigatePage("saved");}}}><span className="nav-icon" aria-hidden="true">♡</span><span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add" aria-label="Dhuro një gjë"><span aria-hidden="true">＋</span></button><button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}><span className="nav-icon" aria-hidden="true">💬</span><span>Mesazhet</span></button><button className={showProfile?"nav-active":""} onClick={()=>{if(user){openProfile();}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}><span className="nav-icon" aria-hidden="true">👤</span><span>Profili</span></button></nav>
   </main>;
 }
 
@@ -666,8 +666,10 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
   useEffect(()=>{load();},[user]);
   async function save(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setSaving(true);
-    const cleanCity=city.trim().slice(0,80), parsedAge=age.trim()?Number(age):null;
-    if(parsedAge!==null&&(!Number.isInteger(parsedAge)||parsedAge<13||parsedAge>120)){alert("Mosha duhet të jetë 13–120.");setSaving(false);return;}
+    const cleanCity=city.trim().slice(0,80), cleanPhone=phone.trim(), parsedAge=age.trim()?Number(age):null;
+    if(!cleanCity || !cities.includes(cleanCity)){alert("Zgjidh qytetin nga lista.");setSaving(false);return;}
+    if(!cleanPhone){alert("Numri i telefonit është i detyrueshëm.");setSaving(false);return;}
+    if(parsedAge===null||!Number.isInteger(parsedAge)||parsedAge<13||parsedAge>120){alert("Mosha është e detyrueshme dhe duhet të jetë 13–120.");setSaving(false);return;}
     let avatar_url=profile?.avatar_url||null;
     if(avatarFile){
       if(!avatarFile.type.startsWith("image/")){alert("Zgjidh një foto.");setSaving(false);return;}
@@ -677,7 +679,7 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
       if(up.error){alert(up.error.message);setSaving(false);return;}
       avatar_url=supabase.storage.from("dhuroje-avatars").getPublicUrl(path).data.publicUrl;
     }
-    const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues",city:cleanCity||null,age:parsedAge,phone:phone.trim()||null,avatar_url});
+    const {error}=await supabase.from("dhuroje_profiles").upsert({id:user.id,display_name:name.trim()||user.email?.split("@")[0]||"Përdorues",city:cleanCity,age:parsedAge,phone:cleanPhone,avatar_url});
     if(error)alert(error.message);else{await load();onChanged();}setSaving(false);
   }
   const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
@@ -690,9 +692,9 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
           <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*" onChange={async e=>{const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressImage(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale · kompresohet automatikisht, max 500 KB</small></div>
         </div>
         <label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
-        <label>Qyteti<input value={city} onChange={e=>setCity(e.target.value)} maxLength={80} placeholder="p.sh. Ferizaj"/></label>
-        <label>Numri i telefonit <span className="form-help">opsionale</span><input value={phone} onChange={e=>setPhone(e.target.value.replace(/[^0-9+ ()-]/g,"").slice(0,25))} inputMode="tel" type="tel" maxLength={25} placeholder="+383 4x xxx xxx"/></label>
-        <label>Mosha <span className="form-help">opsionale</span><input value={age} onChange={e=>setAge(e.target.value.replace(/[^0-9]/g,"").slice(0,3))} inputMode="numeric" type="text" maxLength={3} placeholder="p.sh. 28"/></label>
+        <label>Qyteti <span className="required-mark">*</span><select value={city} onChange={e=>setCity(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
+        <label>Numri i telefonit <span className="required-mark">*</span><input required value={phone} onChange={e=>setPhone(e.target.value.replace(/[^0-9+ ()-]/g,"").slice(0,25))} inputMode="tel" type="tel" maxLength={25} placeholder="+383 4x xxx xxx"/></label>
+        <label>Mosha <span className="required-mark">*</span><input required value={age} onChange={e=>setAge(e.target.value.replace(/[^0-9]/g,"").slice(0,3))} inputMode="numeric" type="text" maxLength={3} placeholder="p.sh. 28"/></label>
         <button className="secondary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj profilin"}</button>
       </form>
       <div className="profile-stats"><div><b>{stats.active}</b><small>aktive</small></div><div><b>{stats.given}</b><small>të dhuruara</small></div><div><b>{avg?avg.toFixed(1):"—"}</b><small>⭐ {reviews.length} vlerësime</small></div></div>
