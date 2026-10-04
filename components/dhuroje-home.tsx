@@ -425,7 +425,7 @@ export default function DhurojeHome(){
           <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Dhurapikë">
             <span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b>
           </button>
-          {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Dhurapikë</strong><span>Fillon me 10 pikë.</span><span>−1 kur merr një gjë.</span><span>+1 kur përfundon një dhurim.</span></div>}
+          {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Dhurapikë</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
         </div>
       </div>
       <div className="geev-mobile-categories" aria-label="Kategoritë">
