@@ -563,3 +563,115 @@ body{font-size:14px!important}
   }
   .route-shell .photo-button{position:relative!important;overflow:hidden!important;cursor:pointer!important}
 }
+
+
+/* Unified request/donation creation screens */
+.request-page-screen{z-index:40!important}
+.request-page-content{
+  width:100%!important;
+  min-height:100%!important;
+  display:flex!important;
+  justify-content:center!important;
+  align-items:flex-start!important;
+  padding:24px 16px 36px!important;
+  box-sizing:border-box!important;
+}
+.request-form-card,.listing-form-card{
+  width:min(100%,680px)!important;
+  margin:0 auto!important;
+  padding:26px!important;
+  background:#fff!important;
+  border:1px solid #e2e9e5!important;
+  border-radius:22px!important;
+  box-shadow:0 12px 40px rgba(22,55,39,.10)!important;
+  box-sizing:border-box!important;
+  color:var(--v-ink)!important;
+}
+.request-form-head{
+  display:flex!important;
+  align-items:flex-start!important;
+  justify-content:space-between!important;
+  gap:18px!important;
+  margin-bottom:24px!important;
+}
+.request-form-head h2{
+  margin:3px 0 6px!important;
+  font-size:25px!important;
+  line-height:1.12!important;
+  letter-spacing:-.5px!important;
+}
+.request-form-head>div>span{
+  display:block!important;
+  color:#74807a!important;
+  font-size:14px!important;
+  line-height:1.45!important;
+  max-width:540px!important;
+}
+.request-form-card>label,.listing-form-card>label{
+  display:block!important;
+  margin:0 0 17px!important;
+  font-size:13px!important;
+  font-weight:800!important;
+  color:#34453d!important;
+}
+.request-form-card input,.request-form-card select,.request-form-card textarea,
+.listing-form-card input,.listing-form-card select,.listing-form-card textarea{
+  display:block!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  margin-top:7px!important;
+  min-height:46px!important;
+  padding:11px 13px!important;
+  border:1px solid #d9e3dd!important;
+  border-radius:12px!important;
+  background:#fbfdfc!important;
+  color:var(--v-ink)!important;
+  font:inherit!important;
+  font-size:16px!important;
+}
+.request-form-card textarea,.listing-form-card textarea{min-height:120px!important;resize:vertical!important}
+.request-form-actions{
+  display:flex!important;
+  justify-content:flex-end!important;
+  gap:10px!important;
+  padding-top:5px!important;
+}
+.request-form-actions button{
+  min-height:46px!important;
+  padding:0 18px!important;
+  border-radius:12px!important;
+  font-size:14px!important;
+  font-weight:800!important;
+}
+.form-inline-error{
+  margin:-5px 0 16px!important;
+  padding:10px 12px!important;
+  border-radius:10px!important;
+  background:#fff1f1!important;
+  color:#a33!important;
+  font-size:13px!important;
+}
+.listing-form-card .photo-picker{margin:0 0 18px!important}
+.listing-form-card .food-fields{margin:0 0 18px!important}
+@media(max-width:620px){
+  .request-page-content{
+    padding:10px 10px 24px!important;
+  }
+  .request-form-card,.listing-form-card{
+    width:100%!important;
+    padding:18px!important;
+    border-radius:17px!important;
+    box-shadow:0 6px 24px rgba(22,55,39,.08)!important;
+  }
+  .request-form-head{margin-bottom:20px!important}
+  .request-form-head h2{font-size:22px!important}
+  .request-form-head>div>span{font-size:13px!important}
+  .request-form-actions{position:sticky!important;bottom:0!important;padding:12px 0 2px!important;background:#fff!important}
+  .request-form-actions button{flex:1!important}
+  .listing-form-card .primary.full{
+    position:sticky!important;
+    bottom:0!important;
+    z-index:4!important;
+    margin-top:8px!important;
+  }
+}
