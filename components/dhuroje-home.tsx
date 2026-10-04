@@ -64,7 +64,7 @@ export default function DhurojeHome(){
   const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
-  const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[foodFilter,setFoodFilter]=useState<"all"|"sealed"|"opened"|"refrigerated">("all");
+  const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[foodFilter,setFoodFilter]=useState<"all"|"sealed"|"opened"|"refrigerated">("all"),[exploreSearchOpen,setExploreSearchOpen]=useState(false);
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
   function navigatePage(page:string,id?:string,conversation?:string){
@@ -153,6 +153,7 @@ export default function DhurojeHome(){
     let a=listings.filter(x=>
       (category==="Të gjitha"||x.category===categoryDb[category])&&
       (x.title+" "+(x.description||"")).toLowerCase().includes(query.toLowerCase())&&
+      (foodFilter==="all"||x.category!=="food"||(foodFilter==="sealed"&&!x.food_opened)||(foodFilter==="opened"&&!!x.food_opened)||(foodFilter==="refrigerated"&&!!x.food_refrigerated))&&
       (!favoritesOnly||favorites.includes(x.id))&&
       (!searchCity||x.location_name===searchCity)&&
       (location==="Lokacioni im" || !cities.includes(location) || x.location_name===location)
@@ -415,7 +416,9 @@ export default function DhurojeHome(){
     );
   }
 
-  return <main>
+  const activeExploreFilters=(category!=="Të gjitha"?1:0)+(searchCity?1:0)+(foodFilter!=="all"?1:0)+(nearbyOnly?1:0);
+
+  return <main className={pageRoute.page==="explore"?"explore-route":""}>
     <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="header-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko"/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></div><nav className="top-nav"><button className="top-nav-active" onClick={()=>{setFavoritesOnly(false);setMapMode(false);goHome()}}><span aria-hidden="true">🔎</span> Eksploro</button><button onClick={()=>{if(user){setFavoritesOnly(true);setMapMode(false);navigatePage("saved")}else{setShowAuth(true);setAuthMode("login");navigatePage("auth")}}}><span aria-hidden="true">♡</span> Të ruajturat</button></nav><div className="top-actions">
       <button className="header-link" onClick={()=>openPosting()}><span aria-hidden="true">🎁</span> Dhuro</button>{user&&<button className="notification-button" aria-label="Njoftimet" onClick={openNotifications}>🔔{notificationCount>0&&<span>{notificationCount>99?"99+":notificationCount}</span>}</button>}<button className="profile-button" aria-label="Profili" onClick={()=>user?openProfile():setShowMenu(!showMenu)}>●</button>
       {showMenu&&<div className="profile-menu">{user?<><strong>{profile?.display_name||user.email}</strong><button onClick={()=>{setShowMessages(true);navigatePage("messages")}}>💬 Mesazhet</button><button onClick={()=>{if(requireAuth()){setShowDashboard(true);navigatePage("dashboard")}}}>📦 Paneli im</button><button onClick={signOut}>Dil</button></>:<button onClick={()=>{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth")}}>Hyr / Regjistrohu</button>}</div>}
@@ -423,7 +426,38 @@ export default function DhurojeHome(){
 
     {error&&<div className="app-error-toast" role="alert"><span>⚠️</span><span>{error}</span><button type="button" onClick={()=>setError("")} aria-label="Mbyll gabimin">×</button></div>}
 
-    <section className="geev-mobile-home" aria-label="Faqja kryesore Dhuroje">
+    {pageRoute.page==="explore"&&<section className="dhuroje-explore-page" aria-label="Eksploro dhuratat">
+      <div className="explore-mobile-head">
+        <div className="explore-location"><span>⌖</span><strong>{location}</strong><b>⌄</b></div>
+        <div className="explore-head-actions">
+          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Dhurapikë"><span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b></button>
+          <button className="explore-search-button" onClick={()=>setExploreSearchOpen(v=>!v)} aria-label="Kërko">⌕</button>
+        </div>
+        {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Dhurapikë</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
+      </div>
+      {exploreSearchOpen&&<div className="explore-search"><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko në Dhuroje"/>{query&&<button onClick={()=>setQuery("")}>×</button>}</div>}
+      <div className="explore-tabs"><button className="active">🛋️ <span>Gjërat</span></button><button>Ushqim</button><button>📋 Kërkesa</button></div>
+      <div className="explore-filter-row">
+        <button className="explore-filter-icon" onClick={()=>setShowFilters(v=>!v)} aria-expanded={showFilters}>☷{activeExploreFilters>0&&<i>{activeExploreFilters}</i>}</button>
+        <button className={category!=="Të gjitha"?"selected":""} onClick={()=>setShowFilters(true)}>Kategoritë{category!=="Të gjitha"&&<b>1</b>}⌄</button>
+        <button className={nearbyOnly?"selected":""} onClick={()=>setNearbyOnly(v=>!v)}>{nearbyOnly?"Pranë meje":"Të disponueshme"}</button>
+        <button onClick={()=>setSortMode(sortMode==="new"?"near":"new")} disabled={!coords}>{sortMode==="near"?"Më të afërtat":"Më të rejat"} ↕</button>
+      </div>
+      {showFilters&&<div className="explore-filter-panel">
+        <div><strong>Kategoria</strong><div className="explore-filter-options">{categories.map(c=><button key={c} className={category===c?"active":""} onClick={()=>{setCategory(c);setShowFilters(false)}}>{c}</button>)}</div></div>
+        <div><strong>Qyteti</strong><select value={searchCity} onChange={e=>setSearchCity(e.target.value)}><option value="">Të gjitha qytetet</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+        <div><strong>Ushqimi</strong><div className="explore-filter-options">{[["all","Të gjitha"],["sealed","Të pahapura"],["opened","Të hapura"],["refrigerated","Në frigorifer"]].map(([v,l])=><button key={v} className={foodFilter===v?"active":""} onClick={()=>setFoodFilter(v as typeof foodFilter)}>{l}</button>)}</div></div>
+        <div className="explore-filter-actions"><button onClick={()=>{setCategory("Të gjitha");setSearchCity("");setFoodFilter("all");setNearbyOnly(false);setShowFilters(false)}}>Pastro filtrat</button><strong>{filtered.length} rezultate</strong></div>
+      </div>}
+      <div className="explore-result-head"><strong>{filtered.length} gjëra</strong><span>{location}</span></div>
+      <div className="explore-grid">{filtered.map(item=><article className="explore-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
+        <div className="explore-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
+        <div className="explore-card-body"><strong>{item.title}</strong><span>⌖ {item.location_name||"Pranë teje"}{coords&&distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!=null?" · "+distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!.toFixed(0)+" km":""}</span></div>
+      </article>)}</div>
+      {!loading&&filtered.length===0&&<div className="explore-empty">Nuk u gjet asnjë dhuratë me këto filtra.</div>}
+    </section>}
+
+    <section className={`geev-mobile-home ${pageRoute.page==="explore"?"explore-hidden":""}`} aria-label="Faqja kryesore Dhuroje">
       <div className="geev-mobile-location">
         <div className="geev-brand">Dhuroje</div><select className="geev-city-select" value={cities.includes(location)?location:""} onChange={e=>selectCity(e.target.value)} aria-label="Zgjidh qytetin">
           <option value="">Zgjidh qytetin</option>{cities.map(city=><option key={city} value={city}>{city}</option>)}
@@ -506,7 +540,7 @@ export default function DhurojeHome(){
     {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
     {showDashboard&&<div className="page-screen"><Dashboard user={user} profile={profile} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven} onProfile={openProfile} onMessages={()=>{setShowMessages(true);navigatePage("messages")}} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id)}} onSaved={()=>{setFavoritesOnly(true);navigatePage("saved")}} onRequested={()=>navigatePage("dashboard")}/></div>}
-    <nav className="bottom-nav" aria-label="Navigimi kryesor"><button className="nav-active" onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}><span className="nav-icon" aria-hidden="true">🏠</span><span>Eksploro</span></button><button className={favoritesOnly?"nav-active":""} onClick={()=>{if(requireAuth()){setFavoritesOnly(true);setMapMode(false);navigatePage("saved");}}}><span className="nav-icon" aria-hidden="true">♡</span><span>Ruajturat</span></button><button onClick={()=>openPosting()} className="nav-add" aria-label="Dhuro një gjë"><span aria-hidden="true">＋</span></button><button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}><span className="nav-icon" aria-hidden="true">💬</span><span>Mesazhet</span></button><button className={showProfile?"nav-active":""} onClick={()=>{if(user){openProfile();}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}><span className="nav-icon" aria-hidden="true">👤</span><span>Profili</span></button></nav>
+    <nav className="bottom-nav" aria-label="Navigimi kryesor"><button className={pageRoute.page==="home"?"nav-active":""} onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}><span className="nav-icon" aria-hidden="true">⌂</span><span>Kryefaqja</span></button><button className={pageRoute.page==="explore"?"nav-active":""} onClick={()=>{setFavoritesOnly(false);setMapMode(false);navigatePage("explore")}}><span className="nav-icon" aria-hidden="true">⌕</span><span>Eksploro</span></button><button onClick={()=>openPosting()} className="nav-add" aria-label="Dhuro një gjë"><span aria-hidden="true">＋</span></button><button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}><span className="nav-icon" aria-hidden="true">▤</span><span>Mesazhet</span></button><button className={showProfile?"nav-active":""} onClick={()=>{if(user){openProfile();}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}><span className="nav-icon" aria-hidden="true">♙</span><span>Profili</span></button></nav>
   </main>;
 }
 
