@@ -65,7 +65,7 @@ export default function DhurojeHome(){
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
   const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[conditionFilter,setConditionFilter]=useState<"all"|"new"|"good"|"worn"|"broken">("all"),[exploreSearchOpen,setExploreSearchOpen]=useState(false),[exploreTab,setExploreTab]=useState<"things"|"food"|"requests">("things");
-  const [requests,setRequests]=useState<any[]>([]),[showRequestForm,setShowRequestForm]=useState(false),[requestSaving,setRequestSaving]=useState(false);
+  const [requests,setRequests]=useState<any[]>([]),[showRequestForm,setShowRequestForm]=useState(false),[requestSaving,setRequestSaving]=useState(false),[requestDraft,setRequestDraft]=useState<{title:string;category:string;location_name:string;description:string}>({title:"",category:"other",location_name:"",description:""});
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
   function navigatePage(page:string,id?:string,conversation?:string){
@@ -106,7 +106,7 @@ export default function DhurojeHome(){
       setProfile(p.data);setDhurapike(Number.isFinite(Number(p.data?.dhurapike))?Number(p.data.dhurapike):10);setListingCity(p.data?.city||"");setLocation(p.data?.city||"Ferizaj");setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
     } else {setProfile(null);setFavorites([]);setClaims([]);}
     if(u){
-      const {data:rs,error:re}=await supabase.from("dhuroje_requests").select("*").eq("requester_id",u.id).order("created_at",{ascending:false});
+      const {data:rs,error:re}=await supabase.from("dhuroje_requests").select("*").eq("status","open").order("created_at",{ascending:false});
       if(re)setError(re.message); else setRequests(rs||[]);
     } else setRequests([]);
     setLoading(false);
@@ -471,16 +471,19 @@ export default function DhurojeHome(){
         <div className="explore-filter-actions"><button onClick={()=>{setCategory(exploreTab==="food"?"Ushqim":"Të gjitha");setSearchCity("");setConditionFilter("all");setNearbyOnly(false);setShowFilters(false)}}>Pastro filtrat</button><strong>{filtered.length} rezultate</strong></div>
       </div>}
       {exploreTab==="requests"?<div className="explore-requests-page">
-        <div className="explore-requests-head"><div><strong>Kërkesat e mia</strong><span>Gjëra që po kërkon nga komuniteti.</span></div><button onClick={()=>{if(requireAuth())setShowRequestForm(true)}}>+ Kërko diçka</button></div>
+        <div className="explore-requests-head"><div><strong>Kërkesat e komunitetit</strong><span>Shiko çfarë po kërkojnë njerëzit dhe kërko edhe ti atë dhuratë.</span></div><button onClick={()=>{if(requireAuth()){setRequestDraft({title:"",category:"other",location_name:profile?.city||"Ferizaj",description:""});setShowRequestForm(true)}}}>+ Kërko diçka</button></div>
         {showRequestForm&&<form className="explore-request-form" onSubmit={createRequest}>
-          <label>Çfarë po kërkon?<input name="title" required maxLength={100} placeholder="p.sh. tavolinë, rroba fëmijësh..." /></label>
-          <label>Kategoria<select name="category" defaultValue="other">{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
-          <label>Qyteti<select name="location_name" defaultValue={profile?.city||"Ferizaj"}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-          <label>Përshkrimi<textarea name="description" rows={3} maxLength={500} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
+          <label>Çfarë po kërkon?<input name="title" required maxLength={100} value={requestDraft.title} onChange={e=>setRequestDraft(v=>({...v,title:e.target.value}))} placeholder="p.sh. tavolinë, rroba fëmijësh..." /></label>
+          <label>Kategoria<select name="category" value={requestDraft.category} onChange={e=>setRequestDraft(v=>({...v,category:e.target.value}))}>{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
+          <label>Qyteti<select name="location_name" value={requestDraft.location_name} onChange={e=>setRequestDraft(v=>({...v,location_name:e.target.value}))}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
+          <label>Përshkrimi<textarea name="description" rows={3} maxLength={500} value={requestDraft.description} onChange={e=>setRequestDraft(v=>({...v,description:e.target.value}))} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
           <div><button type="button" onClick={()=>setShowRequestForm(false)}>Anulo</button><button type="submit" disabled={requestSaving}>{requestSaving?"Po ruhet...":"Publiko kërkesën"}</button></div>
         </form>}
-        {!showRequestForm&&requests.length===0&&<div className="explore-empty explore-requests-empty"><strong>Nuk ke bërë ende kërkesa.</strong><span>Krijo një kërkesë dhe komuniteti mund të të ndihmojë.</span></div>}
-        <div className="explore-request-list">{requests.map((r:any)=><article className="explore-request-card" key={r.id}><div><strong>{r.title}</strong><span>{categoryLabel[r.category]||"Të tjera"} · {r.location_name||"Pa qytet"}</span>{r.description&&<p>{r.description}</p>}</div><small>{r.status==="open"?"E hapur":r.status==="fulfilled"?"U plotësua":"Mbyllur"}</small></article>)}</div>
+        {!showRequestForm&&requests.length===0&&<div className="explore-empty explore-requests-empty"><strong>Nuk ka ende kërkesa.</strong><span>Bëhu i pari që kërkon diçka nga komuniteti.</span></div>}
+        <div className="explore-request-list">{requests.map((r:any)=><article className="explore-request-card" key={r.id}>
+          <div><strong>{r.title}</strong><span>{categoryLabel[r.category]||"Të tjera"} · {r.location_name||"Pa qytet"}</span>{r.description&&<p>{r.description}</p>}</div>
+          <div className="explore-request-actions"><small>E kërkuar</small><button type="button" onClick={()=>{if(!requireAuth())return;setRequestDraft({title:r.title,category:r.category||"other",location_name:r.location_name||profile?.city||"Ferizaj",description:r.description||""});setShowRequestForm(true);}}>Kërko këtë dhuratë</button></div>
+        </article>)}</div>
       </div>:<><div className="explore-result-head"><strong>{filtered.length} {exploreTab==="food"?"ushqime":"gjëra"}</strong><span>{location}</span></div>
       <div className="explore-grid">{filtered.map(item=><article className="explore-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
         <div className="explore-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
