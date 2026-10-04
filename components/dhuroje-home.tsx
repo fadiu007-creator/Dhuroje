@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/browser";
 type Category = "Të gjitha" | "Ushqim" | "Veshmbathje" | "Shtëpi" | "Elektronikë" | "Fëmijë" | "Libra" | "Të tjera";
 type Listing = {
   id:string; owner_id:string; title:string; description:string; category:string; status:string;
-  location_name:string|null; latitude:number|null; longitude:number|null; food_refrigerated:boolean|null; food_opened:boolean|null; created_at:string;
+  location_name:string|null; latitude:number|null; longitude:number|null; condition:string|null; food_refrigerated:boolean|null; food_opened:boolean|null; created_at:string;
   owner?:{display_name:string|null; avatar_url?:string|null}|null;
 };
 type Image = { id:string; listing_id:string; storage_path:string; sort_order:number };
@@ -64,7 +64,7 @@ export default function DhurojeHome(){
   const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
-  const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[foodFilter,setFoodFilter]=useState<"all"|"sealed"|"opened"|"refrigerated">("all"),[exploreSearchOpen,setExploreSearchOpen]=useState(false);
+  const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[conditionFilter,setConditionFilter]=useState<"all"|"new"|"good"|"worn"|"broken">("all"),[exploreSearchOpen,setExploreSearchOpen]=useState(false),[exploreTab,setExploreTab]=useState<"things"|"food"|"requests">("things");
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
   function navigatePage(page:string,id?:string,conversation?:string){
@@ -153,7 +153,7 @@ export default function DhurojeHome(){
     let a=listings.filter(x=>
       (category==="Të gjitha"||x.category===categoryDb[category])&&
       (x.title+" "+(x.description||"")).toLowerCase().includes(query.toLowerCase())&&
-      (foodFilter==="all"||x.category!=="food"||(foodFilter==="sealed"&&!x.food_opened)||(foodFilter==="opened"&&!!x.food_opened)||(foodFilter==="refrigerated"&&!!x.food_refrigerated))&&
+      (conditionFilter==="all"||x.condition===conditionFilter)&&
       (!favoritesOnly||favorites.includes(x.id))&&
       (!searchCity||x.location_name===searchCity)&&
       (location==="Lokacioni im" || !cities.includes(location) || x.location_name===location)
@@ -416,7 +416,7 @@ export default function DhurojeHome(){
     );
   }
 
-  const activeExploreFilters=(category!=="Të gjitha"?1:0)+(searchCity?1:0)+(foodFilter!=="all"?1:0)+(nearbyOnly?1:0);
+  const activeExploreFilters=(category!=="Të gjitha"?1:0)+(searchCity?1:0)+(conditionFilter!=="all"?1:0)+(nearbyOnly?1:0);
 
   return <main className={pageRoute.page==="explore"?"explore-route":""}>
     <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="header-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko"/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></div><nav className="top-nav"><button className="top-nav-active" onClick={()=>{setFavoritesOnly(false);setMapMode(false);goHome()}}><span aria-hidden="true">🔎</span> Eksploro</button><button onClick={()=>{if(user){setFavoritesOnly(true);setMapMode(false);navigatePage("saved")}else{setShowAuth(true);setAuthMode("login");navigatePage("auth")}}}><span aria-hidden="true">♡</span> Të ruajturat</button></nav><div className="top-actions">
@@ -436,20 +436,20 @@ export default function DhurojeHome(){
         {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Dhurapikë</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
       </div>
       {exploreSearchOpen&&<div className="explore-search"><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko në Dhuroje"/>{query&&<button onClick={()=>setQuery("")}>×</button>}</div>}
-      <div className="explore-tabs"><button className="active">🛋️ <span>Gjërat</span></button><button>Ushqim</button><button>📋 Kërkesa</button></div>
+      <div className="explore-tabs"><button className={exploreTab==="things"?"active":""} onClick={()=>{setExploreTab("things");setCategory("Të gjitha");setShowFilters(false)}}>🛋️ <span>Gjërat</span></button><button className={exploreTab==="food"?"active":""} onClick={()=>{setExploreTab("food");setCategory("Ushqim");setShowFilters(false)}}>Ushqim</button><button className={exploreTab==="requests"?"active":""} onClick={()=>{setExploreTab("requests");setShowFilters(false)}}>📋 Kërkesa</button></div>
       <div className="explore-filter-row">
         <button className="explore-filter-icon" onClick={()=>setShowFilters(v=>!v)} aria-expanded={showFilters}>☷{activeExploreFilters>0&&<i>{activeExploreFilters}</i>}</button>
-        <button className={category!=="Të gjitha"?"selected":""} onClick={()=>setShowFilters(true)}>Kategoritë{category!=="Të gjitha"&&<b>1</b>}⌄</button>
+        {exploreTab!=="requests"&&<button className={category!=="Të gjitha"?"selected":""} onClick={()=>setShowFilters(true)}>Kategoritë{category!=="Të gjitha"&&<b>1</b>}⌄</button>}
         <button className={nearbyOnly?"selected":""} onClick={()=>setNearbyOnly(v=>!v)}>{nearbyOnly?"Pranë meje":"Të disponueshme"}</button>
         <button onClick={()=>setSortMode(sortMode==="new"?"near":"new")} disabled={!coords}>{sortMode==="near"?"Më të afërtat":"Më të rejat"} ↕</button>
       </div>
       {showFilters&&<div className="explore-filter-panel">
         <div><strong>Kategoria</strong><div className="explore-filter-options">{categories.map(c=><button key={c} className={category===c?"active":""} onClick={()=>{setCategory(c);setShowFilters(false)}}>{c}</button>)}</div></div>
         <div><strong>Qyteti</strong><select value={searchCity} onChange={e=>setSearchCity(e.target.value)}><option value="">Të gjitha qytetet</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-        <div><strong>Ushqimi</strong><div className="explore-filter-options">{[["all","Të gjitha"],["sealed","Të pahapura"],["opened","Të hapura"],["refrigerated","Në frigorifer"]].map(([v,l])=><button key={v} className={foodFilter===v?"active":""} onClick={()=>setFoodFilter(v as typeof foodFilter)}>{l}</button>)}</div></div>
-        <div className="explore-filter-actions"><button onClick={()=>{setCategory("Të gjitha");setSearchCity("");setFoodFilter("all");setNearbyOnly(false);setShowFilters(false)}}>Pastro filtrat</button><strong>{filtered.length} rezultate</strong></div>
+        {exploreTab==="things"&&<div><strong>Gjendja e objektit</strong><div className="explore-filter-options">{[["all","Të gjitha"],["new","Si e re"],["good","Gjendje e mirë"],["worn","E përdorur"],["broken","E dëmtuar"]].map(([v,l])=><button key={v} className={conditionFilter===v?"active":""} onClick={()=>setConditionFilter(v as typeof conditionFilter)}>{l}</button>)}</div></div>}
+        <div className="explore-filter-actions"><button onClick={()=>{setCategory(exploreTab==="food"?"Ushqim":"Të gjitha");setSearchCity("");setConditionFilter("all");setNearbyOnly(false);setShowFilters(false)}}>Pastro filtrat</button><strong>{filtered.length} rezultate</strong></div>
       </div>}
-      <div className="explore-result-head"><strong>{filtered.length} gjëra</strong><span>{location}</span></div>
+      {exploreTab==="requests"?<div className="explore-empty explore-requests-empty"><strong>Kërkesat</strong><span>Këtu do të shfaqen kërkesat e përdoruesve për gjërat që u nevojiten.</span></div>:<><div className="explore-result-head"><strong>{filtered.length} {exploreTab==="food"?"ushqime":"gjëra"}</strong><span>{location}</span></div>
       <div className="explore-grid">{filtered.map(item=><article className="explore-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
         <div className="explore-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
         <div className="explore-card-body"><strong>{item.title}</strong><span>⌖ {item.location_name||"Pranë teje"}{coords&&distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!=null?" · "+distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!.toFixed(0)+" km":""}</span></div>
