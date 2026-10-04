@@ -447,7 +447,7 @@ export default function DhurojeHome(){
           </button>
         )}
       </div>      <div className="geev-promo">
-        <div className="geev-promo-copy"><strong>Jepu gjërave një<br/><em>jetë të re!</em></strong><span>Dhuro atë që nuk të duhet më.</span><button onClick={openPosting}>Dhuro tani</button></div>
+        <div className="geev-promo-copy"><strong>Dora që jep,<br/><em>nuk mbetet kurrë zbrazët.</em></strong><span>Dhuro diçka qe se perdor, dikujt mund ti nevojitet !</span><button onClick={openPosting}>Dhuro tani</button></div>
         <div className="geev-promo-art" aria-hidden="true">🎁</div>
       </div>
       <div className="geev-dots"><i></i><i></i></div>
