@@ -577,7 +577,21 @@ export default function DhurojeHome(){
     {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
     {showDashboard&&<div className="page-screen"><Dashboard user={user} profile={profile} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven} onProfile={openProfile} onMessages={()=>{setShowMessages(true);navigatePage("messages")}} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id)}} onSaved={()=>{setFavoritesOnly(true);navigatePage("saved")}} onRequested={()=>navigatePage("dashboard")}/></div>}
-    <nav className="bottom-nav" aria-label="Navigimi kryesor"><button className={pageRoute.page==="home"?"nav-active":""} onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}><span className="nav-icon" aria-hidden="true">⌂</span><span>Kryefaqja</span></button><button className={pageRoute.page==="explore"?"nav-active":""} onClick={()=>{setFavoritesOnly(false);setMapMode(false);navigatePage("explore")}}><span className="nav-icon" aria-hidden="true">⌕</span><span>Eksploro</span></button><button onClick={()=>openPosting()} className="nav-add" aria-label="Dhuro një gjë"><span aria-hidden="true">＋</span></button><button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}><span className="nav-icon" aria-hidden="true">▤</span><span>Mesazhet</span></button><button className={showProfile?"nav-active":""} onClick={()=>{if(user){openProfile();}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}><span className="nav-icon" aria-hidden="true">♙</span><span>Profili</span></button></nav>
+    <nav className="bottom-nav" aria-label="Navigimi kryesor">
+      <button className={pageRoute.page==="home"?"nav-active":""} onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}>
+        <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 19.5z"/><path d="M9 21v-6h6v6"/></svg></span><span>Kryefaqja</span>
+      </button>
+      <button className={pageRoute.page==="explore"?"nav-active":""} onClick={()=>{setFavoritesOnly(false);setMapMode(false);navigatePage("explore")}}>
+        <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg></span><span>Eksploro</span>
+      </button>
+      <button onClick={()=>openPosting()} className="nav-add" aria-label="Dhuro një gjë"><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></button>
+      <button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}>
+        <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5.5 4v-4.5A2.5 2.5 0 0 1 2 13V5.5z"/></svg></span><span>Mesazhet</span>
+      </button>
+      <button className={showProfile?"nav-active":""} onClick={()=>{if(user){openProfile();}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}>
+        <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg></span><span>Profili</span>
+      </button>
+    </nav>
   </main>;
 }
 
