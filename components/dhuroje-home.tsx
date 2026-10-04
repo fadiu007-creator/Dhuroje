@@ -323,22 +323,36 @@ export default function DhurojeHome(){
     return item as Listing;
   }
   async function createListing(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();setError("");
+    e.preventDefault();
+    if(posting)return;
+    setError("");
     const f=new FormData(e.currentTarget);
     const description=String(f.get("description")||"").trim();
     if(!description){setError("Ju lutem plotësoni përshkrimin.");return;}
     const selectedPhotos=selectedPhotoFiles.length?selectedPhotoFiles:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
-    if(!selectedPhotos.length || selectedPhotos.length!==photoPreviews.length){setPhotoError(true);setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");return;}
+    if(!selectedPhotos.length || selectedPhotos.length!==photoPreviews.length){
+      setPhotoError(true);
+      setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");
+      return;
+    }
+    if(!user){
+      setError("Hyr ose krijo një llogari para se të publikosh.");
+      return;
+    }
     setPosting(true);
-    if(!user){setError("Hyr ose krijo një llogari para se të publikosh.");setPosting(false);return;}
-    const created=await finishListing(user,f,selectedPhotos);
-    setPosting(false);
-    if(created){
-      setShowGive(false);
-      setPhotoError(false);
-      setSelectedPhotoFiles([]);
-      await load();
-      navigatePage("listing",created.id);
+    try{
+      const created=await finishListing(user,f,selectedPhotos);
+      if(created){
+        setShowGive(false);
+        setPhotoError(false);
+        setSelectedPhotoFiles([]);
+        await load();
+        navigatePage("listing",created.id);
+      }
+    }catch(err:any){
+      setError(err?.message||"Nuk u publikua shpallja. Provo përsëri.");
+    }finally{
+      setPosting(false);
     }
   }
   async function deleteListing(listing:Listing){
