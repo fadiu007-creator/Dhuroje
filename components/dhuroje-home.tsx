@@ -58,7 +58,7 @@ function distanceKm(a:number|null,b:number|null,c:number|null,d:number|null){
 export default function DhurojeHome(){
   const [listings,setListings]=useState<Listing[]>([]),[images,setImages]=useState<Record<string,string[]>>({});
   const [category,setCategory]=useState<Category>("Të gjitha"),[query,setQuery]=useState("");
-  const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
+  const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[dhurapike,setDhurapike]=useState(10),[showDhurapike,setShowDhurapike]=useState(false),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
   const [showMoreCategories,setShowMoreCategories]=useState(false),[showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
   const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
   const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
@@ -102,7 +102,7 @@ export default function DhurojeHome(){
         supabase.from("dhuroje_favorites").select("listing_id").eq("user_id",u.id),
         supabase.from("dhuroje_claims").select("listing_id").eq("claimant_id",u.id)
       ]);
-      setProfile(p.data);setListingCity(p.data?.city||"");setLocation(p.data?.city||"Ferizaj");setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
+      setProfile(p.data);setDhurapike(Number.isFinite(Number(p.data?.dhurapike))?Number(p.data.dhurapike):10);setListingCity(p.data?.city||"");setLocation(p.data?.city||"Ferizaj");setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
     } else {setProfile(null);setFavorites([]);setClaims([]);}
     setLoading(false);
   }
@@ -318,7 +318,7 @@ export default function DhurojeHome(){
     const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
     if(currentUser.id!==listing.owner_id){setError("Nuk mund ta shënosh këtë shpallje si të dhuruar.");return;}
     if(!window.confirm("Ta shënojmë këtë shpallje si të dhuruar? Ajo do të hiqet nga lista e dhuratave aktive."))return;
-    const {error:e}=await supabase.from("dhuroje_listings").update({status:"collected"}).eq("id",listing.id).eq("owner_id",currentUser.id);
+    const {error:e}=await supabase.rpc("dhuroje_complete_donation",{p_listing_id:listing.id});
     if(e){setError(e.message);return;}
     setActiveListing(null);setEditingListing(null);await load();
   }
@@ -422,7 +422,10 @@ export default function DhurojeHome(){
         <div className="geev-brand">Dhuroje</div><button onClick={locate} aria-label="Ndrysho lokacionin"><span>{location}</span><b>⌄</b></button>
         <div className="geev-mobile-head-actions">
           <button onClick={openNotifications} aria-label="Njoftimet">♧</button>
-          <button onClick={()=>user?openProfile():setShowMenu(!showMenu)} aria-label="Profili">●</button>
+          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Dhurapikë">
+            <span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b>
+          </button>
+          {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Dhurapikë</strong><span>Fillon me 10 pikë.</span><span>−1 kur merr një gjë.</span><span>+1 kur përfundon një dhurim.</span></div>}
         </div>
       </div>
       <div className="geev-mobile-categories" aria-label="Kategoritë">
