@@ -447,7 +447,7 @@ export default function DhurojeHome(){
       {showFilters&&<div className="explore-filter-panel">
         <div><strong>Kategoria</strong><div className="explore-filter-options">{categories.map(c=><button key={c} className={category===c?"active":""} onClick={()=>{setCategory(c);setShowFilters(false)}}>{c}</button>)}</div></div>
         <div><strong>Qyteti</strong><select value={searchCity} onChange={e=>setSearchCity(e.target.value)}><option value="">Të gjitha qytetet</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-        {exploreTab==="things"&&<div><strong>Gjendja e objektit</strong><div className="explore-filter-options">{[["all","Të gjitha"],["new","Si e re"],["good","Gjendje e mirë"],["worn","E përdorur"],["broken","E dëmtuar"]].map(([v,l])=><button key={v} className={conditionFilter===v?"active":""} onClick={()=>setConditionFilter(v as typeof conditionFilter)}>{l}</button>)}</div></div>}
+        {exploreTab==="things"&&<div><strong>Gjendja e objektit</strong><div className="explore-filter-options">{[["all","All"],["new","Like new"],["good","Good condition"],["worn","Worn"],["broken","Broken"]].map(([v,l])=><button key={v} className={conditionFilter===v?"active":""} onClick={()=>setConditionFilter(v as typeof conditionFilter)}>{l}</button>)}</div></div>}
         <div className="explore-filter-actions"><button onClick={()=>{setCategory(exploreTab==="food"?"Ushqim":"Të gjitha");setSearchCity("");setConditionFilter("all");setNearbyOnly(false);setShowFilters(false)}}>Pastro filtrat</button><strong>{filtered.length} rezultate</strong></div>
       </div>}
       {exploreTab==="requests"?<div className="explore-empty explore-requests-empty"><strong>Kërkesat</strong><span>Këtu do të shfaqen kërkesat e përdoruesve për gjërat që u nevojiten.</span></div>:<><div className="explore-result-head"><strong>{filtered.length} {exploreTab==="food"?"ushqime":"gjëra"}</strong><span>{location}</span></div>
@@ -456,6 +456,7 @@ export default function DhurojeHome(){
         <div className="explore-card-body"><strong>{item.title}</strong><span>⌖ {item.location_name||"Pranë teje"}{coords&&distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!=null?" · "+distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!.toFixed(0)+" km":""}</span></div>
       </article>)}</div>
       {!loading&&filtered.length===0&&<div className="explore-empty">Nuk u gjet asnjë dhuratë me këto filtra.</div>}
+       </>}
     </section>}
 
     <section className={`geev-mobile-home ${pageRoute.page==="explore"?"explore-hidden":""}`} aria-label="Faqja kryesore Dhuroje">
