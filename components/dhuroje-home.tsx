@@ -349,10 +349,10 @@ export default function DhurojeHome(){
     });
 
     if(e||!conversationId){
-      setShowMessages(true);
+      const detail=e?.message||"Biseda nuk u krijua. Provo përsëri.";
       setMessageConversationId("");
-      navigatePage("messages");
-      setError(e?.message||"Biseda nuk u krijua. Provo përsëri.");
+      setShowMessages(false);
+      setError("Mesazhet: "+detail);
       return;
     }
 
