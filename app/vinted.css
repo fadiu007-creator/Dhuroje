@@ -794,3 +794,66 @@ body{font-size:14px!important}
     font-size:11px!important;
   }
 }
+
+/* Photo upload/preview fixes for all creation and edit routes */
+.listing-form-card .photo-thumbnails{
+  display:flex!important;
+  gap:8px!important;
+  flex-wrap:wrap!important;
+  width:100%!important;
+  max-width:100%!important;
+  margin-top:8px!important;
+}
+.listing-form-card .photo-thumbnail{
+  position:relative!important;
+  flex:0 0 68px!important;
+  width:68px!important;
+  height:68px!important;
+  min-width:68px!important;
+  max-width:68px!important;
+  border:1px solid #d7dcda!important;
+  border-radius:8px!important;
+  overflow:hidden!important;
+  background:#f3f4f4!important;
+  box-sizing:border-box!important;
+}
+.listing-form-card .photo-thumbnail img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  object-fit:cover!important;
+}
+.listing-form-card .photo-thumbnail .photo-remove{
+  position:absolute!important;
+  top:3px!important;
+  right:3px!important;
+  z-index:2!important;
+  width:22px!important;
+  height:22px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:50%!important;
+  background:#fff!important;
+  color:#333!important;
+  box-shadow:0 1px 4px #0005!important;
+  font-size:17px!important;
+  line-height:20px!important;
+}
+.edit-photo{
+  position:relative!important;
+  width:68px!important;
+  height:68px!important;
+  flex:0 0 68px!important;
+  overflow:hidden!important;
+  border-radius:8px!important;
+}
+.edit-photo img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  object-fit:cover!important;
+}
