@@ -59,7 +59,7 @@ export default function DhurojeHome(){
   const [listings,setListings]=useState<Listing[]>([]),[images,setImages]=useState<Record<string,string[]>>({});
   const [category,setCategory]=useState<Category>("Të gjitha"),[query,setQuery]=useState("");
   const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[dhurapike,setDhurapike]=useState(10),[showDhurapike,setShowDhurapike]=useState(false),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
-  const [showMoreCategories,setShowMoreCategories]=useState(false),[showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
+  const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
   const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
   const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
@@ -394,6 +394,12 @@ export default function DhurojeHome(){
     window.history.pushState({page:"auth",mode:authKind},"",window.location.pathname+"?"+params.toString());
     setPageRoute({page:"auth",conversation:authKind});
   }
+  function selectCity(city:string){
+    setLocation(city);
+    setCoords(null);
+    setNearbyOnly(false);
+    setSortMode("new");
+  }
   function locate(){
     if(!navigator.geolocation)return setError("Ky shfletues nuk mbështet lokacionin.");
     navigator.geolocation.getCurrentPosition(p=>{setCoords({lat:p.coords.latitude,lon:p.coords.longitude});setLocation("Lokacioni im");},()=>setError("Lokacioni nuk u lejua."));
@@ -419,7 +425,9 @@ export default function DhurojeHome(){
 
     <section className="geev-mobile-home" aria-label="Faqja kryesore Dhuroje">
       <div className="geev-mobile-location">
-        <div className="geev-brand">Dhuroje</div><button onClick={locate} aria-label="Ndrysho lokacionin"><span>{location}</span><b>⌄</b></button>
+        <div className="geev-brand">Dhuroje</div><select className="geev-city-select" value={cities.includes(location)?location:""} onChange={e=>selectCity(e.target.value)} aria-label="Zgjidh qytetin">
+          <option value="">Zgjidh qytetin</option>{cities.map(city=><option key={city} value={city}>{city}</option>)}
+        </select>
         <div className="geev-mobile-head-actions">
           <button onClick={openNotifications} aria-label="Njoftimet">♧</button>
           <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Dhurapikë">
@@ -430,17 +438,7 @@ export default function DhurojeHome(){
       </div>
       <div className="geev-mobile-categories" aria-label="Kategoritë">
         {[
-          ["Të gjitha","✨","Të gjitha"],["Ushqim","🥖","Ushqim"],["Shtëpi","🪑","Shtëpi"],["Veshmbathje","👕","Veshmbathje"]
-        ].map(([label,icon,value])=>
-          <button key={label} onClick={()=>setCategory(value as Category)} className={category===value?"active":""} aria-label={label}>
-            <span className="geev-cat-icon">{icon}</span><b>{label}</b>
-          </button>
-        )}
-        <button className="geev-more-category" onClick={()=>setShowMoreCategories(x=>!x)} aria-expanded={showMoreCategories}>
-          <span className="geev-cat-icon geev-more-icon">•••</span><b>Më shumë</b>
-        </button>
-        {showMoreCategories&&[
-          ["Elektronikë","📱","Elektronikë"],["Fëmijë","🧸","Fëmijë"],["Libra","📚","Libra"],["Të tjera","🎁","Të tjera"]
+          ["Të gjitha","✨","Të gjitha"],["Ushqim","🥖","Ushqim"],["Shtëpi","🪑","Shtëpi"],["Veshmbathje","👕","Veshmbathje"],["Elektronikë","📱","Elektronikë"],["Fëmijë","🧸","Fëmijë"],["Libra","📚","Libra"],["Të tjera","🎁","Të tjera"]
         ].map(([label,icon,value])=>
           <button key={label} onClick={()=>setCategory(value as Category)} className={category===value?"active":""} aria-label={label}>
             <span className="geev-cat-icon">{icon}</span><b>{label}</b>
@@ -453,7 +451,7 @@ export default function DhurojeHome(){
       <div className="geev-dots"><i></i><i></i></div>
       <div className="geev-mobile-section-head">
         <div><h2>Gjëra pranë teje</h2><p>{location}</p></div>
-        <button onClick={()=>{setNearbyOnly(true);if(!coords)locate();}}>Shiko të gjitha</button>
+        <button onClick={()=>setNearbyOnly(false)}>Shiko të gjitha</button>
       </div>
       <div className="geev-horizontal-list">
         {filtered.slice(0,6).map(item=><article className="geev-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
