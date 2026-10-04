@@ -585,7 +585,7 @@ export default function DhurojeHome(){
         <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg></span><span>Eksploro</span>
       </button>
       <button onClick={()=>openPosting()} className="nav-add" aria-label="Dhuro një gjë"><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></button>
-      <button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}>
+      <button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}>
         <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5.5 4v-4.5A2.5 2.5 0 0 1 2 13V5.5z"/></svg></span><span>Mesazhet</span>
       </button>
       <button className={showProfile?"nav-active":""} onClick={()=>{if(user){openProfile();}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}>
