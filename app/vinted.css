@@ -228,3 +228,69 @@ body{font-size:14px!important}
 .app-error-toast span:nth-child(2){flex:1}
 .app-error-toast button{border:0;background:transparent;color:inherit;font-size:22px;line-height:1;cursor:pointer;padding:2px 4px}
 @media(max-width:760px){.app-error-toast{top:10px;font-size:13px}}
+
+
+/* Geev-inspired mobile home */
+.geev-mobile-home{display:none}
+@media(max-width:620px){
+  html,body{background:#faf9f5!important}
+  body{padding-bottom:62px!important}
+  .topbar{display:none!important}
+  .geev-mobile-home{display:block;min-height:100vh;padding:0 0 78px;background:#faf9f5;color:#252923;overflow:hidden}
+  .geev-mobile-location{height:82px;padding:15px 18px 10px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;background:#fff}
+  .geev-brand{font-size:27px;font-weight:900;letter-spacing:-1.8px;font-family:Georgia,serif;color:#173d2b;line-height:1}
+  .geev-mobile-location>button{grid-column:1;grid-row:2;justify-self:start;background:none;padding:0;display:flex;align-items:center;gap:7px;color:#20251f;font-size:15px;font-weight:800}
+  .geev-mobile-location>button b{font-size:19px;line-height:10px}
+  .geev-mobile-head-actions{grid-column:2;grid-row:1 / span 2;display:flex;align-items:center;gap:16px}
+  .geev-mobile-head-actions button{width:36px;height:36px;background:#fff;border:0;font-size:25px;color:#222;display:grid;place-items:center}
+  .geev-mobile-head-actions button:last-child{width:38px;height:38px;border-radius:50%;background:#f7c73c;color:#765600;font-size:17px;border:3px solid #fff}
+  .geev-mobile-categories{height:112px;padding:12px 15px 8px;display:flex;gap:15px;overflow-x:auto;background:#fff;border-bottom:1px solid #eee}
+  .geev-mobile-categories::-webkit-scrollbar{display:none}
+  .geev-mobile-categories button{min-width:72px;background:transparent;border:0;padding:0;display:flex;flex-direction:column;align-items:center;gap:7px;color:#373b35}
+  .geev-mobile-categories button b{font-size:11px;font-weight:700;white-space:nowrap}
+  .geev-cat-icon{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#fff5d9;border:1px solid #f3e9c9;font-size:31px;box-shadow:0 2px 5px rgba(0,0,0,.025)}
+  .geev-mobile-categories button.active .geev-cat-icon{background:#f5df91;border-color:#e9ca62}
+  .geev-promo{height:190px;margin:16px 14px 8px;border-radius:14px;overflow:hidden;position:relative;display:flex;align-items:center;background:linear-gradient(125deg,#f8cf43 0%,#f4b72c 55%,#ef9d24 100%);box-shadow:0 4px 14px rgba(103,79,13,.12)}
+  .geev-promo:before{content:"";position:absolute;width:230px;height:230px;border-radius:50%;right:-45px;top:-55px;background:rgba(255,244,178,.38)}
+  .geev-promo-copy{position:relative;z-index:2;padding:22px 16px 18px 18px;display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+  .geev-promo-copy strong{font-size:22px;line-height:1.08;letter-spacing:-.5px;color:#173f31}
+  .geev-promo-copy em{font-style:normal;color:#fff}
+  .geev-promo-copy span{font-size:11px;color:#5e531f;max-width:190px}
+  .geev-promo-copy button{margin-top:5px;background:#fff;border:0;border-radius:9px;padding:10px 17px;font-size:12px;font-weight:800;color:#30352d}
+  .geev-promo-art{position:absolute;right:24px;bottom:17px;font-size:92px;filter:drop-shadow(0 7px 5px rgba(70,48,0,.16));transform:rotate(-7deg)}
+  .geev-dots{display:flex;justify-content:center;gap:7px;margin:5px 0 20px}
+  .geev-dots i{width:9px;height:9px;border-radius:50%;background:#999}
+  .geev-dots i:first-child{width:26px;border-radius:8px;background:#f5c33d}
+  .geev-mobile-section-head{display:flex;justify-content:space-between;align-items:end;padding:0 18px;margin:0 0 12px}
+  .geev-mobile-section-head h2{margin:0;font-size:23px;line-height:1.05;letter-spacing:-.7px;font-weight:850;color:#242720}
+  .geev-mobile-section-head p{margin:6px 0 0;color:#777a72;font-size:13px}
+  .geev-mobile-section-head button{background:none;border:0;color:#6d7068;font-size:12px;font-weight:700;padding:3px 0}
+  .geev-horizontal-list{display:flex;gap:12px;overflow-x:auto;padding:0 18px 18px;scroll-snap-type:x proximity}
+  .geev-horizontal-list::-webkit-scrollbar,.geev-feature-list::-webkit-scrollbar{display:none}
+  .geev-card{min-width:235px;width:235px;background:#fff;border:1px solid #e5e4df;border-radius:14px;overflow:hidden;scroll-snap-align:start;box-shadow:0 2px 7px rgba(34,35,30,.05)}
+  .geev-card-image{height:190px;position:relative;background:#eeeae1;display:grid;place-items:center;overflow:hidden}
+  .geev-card-image img{width:100%;height:100%;object-fit:cover}
+  .geev-card-image>span{font-size:66px}
+  .geev-card-image>button{position:absolute;right:10px;top:10px;width:38px;height:38px;border-radius:50%;background:#fff;border:0;font-size:22px;box-shadow:0 2px 7px #0002;color:#333}
+  .geev-card-body{padding:12px 13px 13px;display:grid;gap:5px}
+  .geev-card-body strong{font-size:16px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .geev-card-body span{font-size:11px;color:#777b73}
+  .selection-head{margin-top:9px}
+  .geev-feature-list{display:flex;gap:12px;overflow-x:auto;padding:0 18px}
+  .geev-feature-card{min-width:180px;width:180px;background:#fff;border:1px solid #e5e4df;border-radius:13px;overflow:hidden}
+  .geev-feature-image{height:145px;background:#eeeae1;display:grid;place-items:center}
+  .geev-feature-image img{width:100%;height:100%;object-fit:cover}
+  .geev-feature-image span{font-size:50px}
+  .geev-feature-card>div:last-child{padding:10px}
+  .geev-feature-card strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .geev-feature-card small{display:block;color:#777b73;font-size:10px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .geev-empty-mini{padding:35px 12px;color:#85877f;font-size:13px;min-width:280px;text-align:center}
+  /* Keep the existing functional home underneath the new mobile presentation, but out of the mobile viewport. */
+  main>.hero,main>.mobile-search,main>.categories,main>.market-filter-bar,main>.search-filters,main>.location-row,main>.filter-panel,main>.map-panel,main>.section-head,main>.listing-grid,main>.empty{display:none!important}
+  .bottom-nav{left:0;transform:none;width:100%;height:68px!important;background:#fff!important;border-top:1px solid #e8e7e2!important;box-shadow:0 -3px 15px rgba(0,0,0,.05);z-index:50!important;padding:3px 5px env(safe-area-inset-bottom)!important}
+  .bottom-nav button{flex:1;height:58px;font-size:20px!important;color:#85867f!important;gap:3px}
+  .bottom-nav button span:last-child{font-size:10px!important;font-weight:650}
+  .bottom-nav .nav-active{color:#e9b82c!important}
+  .bottom-nav .nav-add{width:54px!important;height:54px!important;min-width:54px;flex:0 0 54px;background:#f4c23b!important;color:#fff!important;border-radius:50%!important;font-size:31px!important;box-shadow:0 3px 9px rgba(130,94,8,.2);align-self:center}
+  .bottom-nav .nav-add span:last-child{display:none}
+}
