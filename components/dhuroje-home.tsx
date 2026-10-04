@@ -418,7 +418,7 @@ export default function DhurojeHome(){
 
     <section className="geev-mobile-home" aria-label="Faqja kryesore Dhuroje">
       <div className="geev-mobile-location">
-        <button onClick={locate} aria-label="Ndrysho lokacionin"><span>{location}</span><b>⌄</b></button>
+        <div className="geev-brand">Dhuroje</div><button onClick={locate} aria-label="Ndrysho lokacionin"><span>{location}</span><b>⌄</b></button>
         <div className="geev-mobile-head-actions">
           <button onClick={openNotifications} aria-label="Njoftimet">♧</button>
           <button onClick={()=>user?openProfile():setShowMenu(!showMenu)} aria-label="Profili">●</button>
