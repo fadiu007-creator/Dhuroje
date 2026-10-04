@@ -425,8 +425,8 @@ export default function DhurojeHome(){
   const activeExploreFilters=(category!=="Të gjitha"?1:0)+(searchCity?1:0)+(conditionFilter!=="all"?1:0)+(nearbyOnly?1:0);
 
   async function createRequest(e:FormEvent<HTMLFormElement>){
-    e.preventDefault(); setError("");
-    const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
+    e.preventDefault(); setError(""); setRequestSaving(true);
+    const currentUser=await requireAuthenticatedUser(); if(!currentUser){setRequestSaving(false);return;}
     const f=new FormData(e.currentTarget);
     const {data,error:e1}=await supabase.from("dhuroje_requests").insert({
       requester_id:currentUser.id,
@@ -435,8 +435,8 @@ export default function DhurojeHome(){
       category:String(f.get("category")||"other"),
       location_name:String(f.get("location_name")||"").trim()||profile?.city||null
     }).select("*").single();
-    if(e1){setError(e1.message);return;}
-    setRequests(x=>[data,...x]);setShowRequestForm(false);setExploreTab("requests");
+    if(e1){setError(e1.message);setRequestSaving(false);return;}
+    setRequests(x=>[data,...x]);setShowRequestForm(false);setExploreTab("requests");setRequestSaving(false);
   }
 
   return <main className={pageRoute.page==="explore"?"explore-route":""}>
