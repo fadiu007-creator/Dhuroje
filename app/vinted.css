@@ -294,3 +294,38 @@ body{font-size:14px!important}
   .bottom-nav .nav-add{width:54px!important;height:54px!important;min-width:54px;flex:0 0 54px;background:#f4c23b!important;color:#fff!important;border-radius:50%!important;font-size:31px!important;box-shadow:0 3px 9px rgba(130,94,8,.2);align-self:center}
   .bottom-nav .nav-add span:last-child{display:none}
 }
+
+
+/* Mobile Geev-like UX, retaining Dhuroje's existing green palette */
+@media(max-width:620px){
+  .geev-mobile-home{background:#fff;color:var(--v-ink)}
+  .geev-mobile-location{height:92px;padding:10px 18px 9px;background:#fff}
+  .geev-brand{color:var(--v-green);font-family:inherit;font-weight:800;letter-spacing:-1.2px;font-size:24px}
+  .geev-mobile-location>button{color:var(--v-ink);font-size:14px}
+  .geev-mobile-head-actions button{color:var(--v-ink);font-size:23px}
+  .geev-mobile-head-actions button:last-child{background:var(--v-green-soft);color:var(--v-green);border:0}
+  .geev-mobile-categories{height:108px;padding:10px 16px 7px;gap:14px;background:#fff;border-bottom:1px solid var(--v-line);align-items:flex-start}
+  .geev-mobile-categories button{min-width:70px;color:#4c5552;gap:6px}
+  .geev-mobile-categories button b{font-size:11px;font-weight:600}
+  .geev-cat-icon{width:62px;height:62px;background:#f2f8f7;border:1px solid #dcebe8;color:var(--v-green);font-size:27px;box-shadow:none}
+  .geev-mobile-categories button.active .geev-cat-icon{background:var(--v-green);border-color:var(--v-green);color:#fff}
+  .geev-mobile-categories button.active b{color:var(--v-green)}
+  .geev-more-icon{font-size:20px;letter-spacing:2px;color:#606864!important}
+  .geev-more-category .geev-cat-icon{background:#f7f8f8;border-color:#e1e4e3}
+  .geev-promo{height:188px;margin:15px 16px 7px;border-radius:8px;background:#f2f8f7;box-shadow:none}
+  .geev-promo:before{background:rgba(0,119,130,.08)}
+  .geev-promo-copy strong{color:var(--v-ink)}
+  .geev-promo-copy em{color:var(--v-green)}
+  .geev-promo-copy span{color:#626b68}
+  .geev-promo-copy button{background:var(--v-green);color:#fff;border-radius:6px}
+  .geev-promo-art{font-size:82px}
+  .geev-dots i{background:#aeb6b3}
+  .geev-dots i:first-child{background:var(--v-green)}
+  .geev-mobile-section-head h2{color:var(--v-ink)}
+  .geev-mobile-section-head p{color:var(--v-muted)}
+  .geev-mobile-section-head button{color:var(--v-green)}
+  .geev-card{border:1px solid var(--v-line);border-radius:7px;box-shadow:none}
+  .geev-card-image{background:#f2f3f3}
+  .geev-card-image>button{color:var(--v-green)}
+  .geev-feature-card{border:1px solid var(--v-line);border-radius:7px}
+}
