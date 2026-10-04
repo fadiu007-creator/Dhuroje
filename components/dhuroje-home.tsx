@@ -494,7 +494,8 @@ export default function DhurojeHome(){
         "Hyrja në llogari po zgjat shumë. Rifresko faqen dhe provo përsëri."
       );
       if(!currentUser)return;
-      const f=new FormData(e.currentTarget);
+      const form=e.currentTarget;
+      const f=new FormData(form);
       const title=String(f.get("title")||"").trim();
       const description=String(f.get("description")||"").trim();
       const category=String(f.get("category")||"other");
@@ -558,13 +559,7 @@ export default function DhurojeHome(){
       </div>}
       {exploreTab==="requests"?<div className="explore-requests-page">
         <div className="explore-requests-head"><div><strong>Kërkesat e komunitetit</strong><span>Shiko çfarë po kërkojnë njerëzit dhe kërko edhe ti atë dhuratë.</span></div><button onClick={()=>{if(requireAuth()){setRequestDraft({title:"",category:"other",location_name:profile?.city||"Ferizaj",description:""});setShowRequestForm(true)}}}>+ Kërko diçka</button></div>
-        {showRequestForm&&<form className="explore-request-form" onSubmit={createRequest}>
-          <label>Çfarë po kërkon?<input name="title" required maxLength={100} value={requestDraft.title} onChange={e=>setRequestDraft(v=>({...v,title:e.target.value}))} placeholder="p.sh. tavolinë, rroba fëmijësh..." /></label>
-          <label>Kategoria<select name="category" value={requestDraft.category} onChange={e=>setRequestDraft(v=>({...v,category:e.target.value}))}>{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
-          <label>Qyteti<select name="location_name" value={requestDraft.location_name} onChange={e=>setRequestDraft(v=>({...v,location_name:e.target.value}))}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-          <label>Përshkrimi<textarea name="description" rows={3} maxLength={500} value={requestDraft.description} onChange={e=>setRequestDraft(v=>({...v,description:e.target.value}))} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
-          <div><button type="button" onClick={()=>setShowRequestForm(false)}>Anulo</button><button type="submit" disabled={requestSaving}>{requestSaving?"Po ruhet...":"Publiko kërkesën"}</button></div>
-        </form>}
+        
         {!showRequestForm&&requests.length===0&&<div className="explore-empty explore-requests-empty"><strong>Nuk ka ende kërkesa.</strong><span>Bëhu i pari që kërkon diçka nga komuniteti.</span></div>}
         <div className="explore-request-list">{requests.map((r:any)=><article className="explore-request-card" key={r.id}>
           <div><strong>{r.title}</strong><span>{categoryLabel[r.category]||"Të tjera"} · {r.location_name||"Pa qytet"}</span>{r.description&&<p>{r.description}</p>}</div>
@@ -654,7 +649,16 @@ export default function DhurojeHome(){
 <button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
     </form></div></div>}
 
-    {activeListing&&<div className="page-screen"><ListingDetail listing={activeListing} image={images[activeListing.id]?.[0]} saved={favorites.includes(activeListing.id)} claimed={claims.includes(activeListing.id)} isOwner={user?.id===activeListing.owner_id} onClose={goHome} onClaim={()=>claim(activeListing.id)} onSave={()=>toggleFavorite(activeListing.id)} onChat={()=>startChat(activeListing)} onEdit={()=>quickEditListing(activeListing)} onMarkGiven={()=>markAsGiven(activeListing)} onDelete={()=>deleteListing(activeListing)} onProfile={()=>{setPublicProfileId(activeListing.owner_id);navigatePage("profile",activeListing.owner_id)}}/></div>}
+    {showRequestForm&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card" onSubmit={createRequest}>
+      <div className="request-form-head"><div><p className="eyebrow">KËRKO</p><h2>Çfarë të nevojitet?</h2><span>Publiko një kërkesë dhe lejo komunitetin të të ndihmojë.</span></div><button type="button" className="close" onClick={()=>setShowRequestForm(false)}>×</button></div>
+      <label>Çfarë po kërkon?<input name="title" required maxLength={100} value={requestDraft.title} onChange={e=>setRequestDraft(v=>({...v,title:e.target.value}))} placeholder="p.sh. tavolinë, rroba fëmijësh..." /></label>
+      <label>Kategoria<select name="category" value={requestDraft.category} onChange={e=>setRequestDraft(v=>({...v,category:e.target.value}))}>{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
+      <label>Qyteti<select name="location_name" value={requestDraft.location_name} onChange={e=>setRequestDraft(v=>({...v,location_name:e.target.value}))}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
+      <label>Përshkrimi<textarea name="description" rows={4} maxLength={500} value={requestDraft.description} onChange={e=>setRequestDraft(v=>({...v,description:e.target.value}))} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
+      {error&&<div className="form-inline-error" role="alert">{error}</div>}
+      <div className="request-form-actions"><button type="button" onClick={()=>setShowRequestForm(false)}>Anulo</button><button className="primary" type="submit" disabled={requestSaving}>{requestSaving?"Po ruhet...":"Publiko kërkesën"}</button></div>
+    </form></div></div>}
+    {marker} listing={activeListing} image={images[activeListing.id]?.[0]} saved={favorites.includes(activeListing.id)} claimed={claims.includes(activeListing.id)} isOwner={user?.id===activeListing.owner_id} onClose={goHome} onClaim={()=>claim(activeListing.id)} onSave={()=>toggleFavorite(activeListing.id)} onChat={()=>startChat(activeListing)} onEdit={()=>quickEditListing(activeListing)} onMarkGiven={()=>markAsGiven(activeListing)} onDelete={()=>deleteListing(activeListing)} onProfile={()=>{setPublicProfileId(activeListing.owner_id);navigatePage("profile",activeListing.owner_id)}}/></div>}
     {editingListing&&<div className="page-screen"><EditListingModal listing={editingListing} onClose={()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();}} onSaved={async()=>{setEditingListing(null);if(activeListing)navigatePage("listing",activeListing.id);else goHome();await load();}}/></div>}
     {showCreateMenu&&<div className="page-screen"><div className="page-content"><div className="modal create-menu"><div className="modal-head"><div><p className="eyebrow">KRIJO</p><h2>Çfarë dëshiron të krijosh?</h2></div><button type="button" className="close" onClick={()=>{setShowCreateMenu(false);goHome();}}>×</button></div><div className="create-menu-options"><button type="button" onClick={()=>{setShowCreateMenu(false);openPosting();}}><span className="create-menu-icon">＋</span><span><strong>Dhuro diçka</strong><small>Publiko një gjë që nuk e përdor më.</small></span></button><button type="button" onClick={openRequestCreation}><span className="create-menu-icon">⌕</span><span><strong>Kërko çka të nevojitet</strong><small>Publiko një kërkesë dhe lejo komunitetin të të ndihmojë.</small></span></button></div></div></div></div>}
 {postChoice&&<div className="page-screen"><div className="page-content"><div className="modal auth-choice"><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>Si dëshiron të vazhdosh?</h2></div><button type="button" className="close" onClick={()=>setPostChoice(false)}>×</button></div><p className="form-help">Për të dhuruar një gjë, zgjidh nëse ke llogari apo po poston për herë të parë.</p><button className="primary full" onClick={()=>choosePostAuth("login")}>Kam llogari · Hyr</button><button className="secondary full" onClick={()=>choosePostAuth("signup")}>Jam i ri · Krijo llogari</button></div></div></div>}
