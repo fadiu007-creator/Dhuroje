@@ -154,7 +154,8 @@ export default function DhurojeHome(){
       (category==="Të gjitha"||x.category===categoryDb[category])&&
       (x.title+" "+(x.description||"")).toLowerCase().includes(query.toLowerCase())&&
       (!favoritesOnly||favorites.includes(x.id))&&
-      (!searchCity||x.location_name===searchCity)
+      (!searchCity||x.location_name===searchCity)&&
+      (location==="Lokacioni im" || !cities.includes(location) || x.location_name===location)
       );
     if(nearbyOnly&&coords)a=a.filter(x=>{const d=distanceKm(coords.lat,coords.lon,x.latitude,x.longitude);return d!=null&&d<=25;});
     if(sortMode==="near"&&coords)a=[...a].sort((x,y)=>(distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)??9999)-(distanceKm(coords.lat,coords.lon,y.latitude,y.longitude)??9999));
@@ -424,8 +425,15 @@ export default function DhurojeHome(){
           <button onClick={()=>user?openProfile():setShowMenu(!showMenu)} aria-label="Profili">●</button>
         </div>
       </div>
-      <div className="geev-mobile-categories">
-        
+      <div className="geev-mobile-categories" aria-label="Kategoritë">
+        {[
+          ["Të gjitha","✨","Të gjitha"],["Ushqim","🥖","Ushqim"],["Shtëpi","🪑","Shtëpi"],["Veshmbathje","👕","Veshmbathje"],
+          ["Elektronikë","📱","Elektronikë"],["Fëmijë","🧸","Fëmijë"],["Libra","📚","Libra"],["Të tjera","🎁","Të tjera"]
+        ].map(([label,icon,value])=>
+          <button key={label} onClick={()=>setCategory(value as Category)} className={category===value?"active":""} aria-label={label}>
+            <span className="geev-cat-icon">{icon}</span><b>{label}</b>
+          </button>
+        )}
       </div>
       <div className="geev-promo">
         <div className="geev-promo-copy"><strong>Jepu gjërave një<br/><em>jetë të re!</em></strong><span>Dhuro atë që nuk të duhet më.</span><button onClick={openPosting}>Dhuro tani</button></div>
@@ -433,7 +441,7 @@ export default function DhurojeHome(){
       </div>
       <div className="geev-dots"><i></i><i></i></div>
       <div className="geev-mobile-section-head">
-        <div><h2>Dhurata pranë teje</h2><p>{location}</p></div>
+        <div><h2>Gjëra pranë teje</h2><p>{location}</p></div>
         <button onClick={()=>{setNearbyOnly(true);if(!coords)locate();}}>Shiko të gjitha</button>
       </div>
       <div className="geev-horizontal-list">
@@ -441,10 +449,10 @@ export default function DhurojeHome(){
           <div className="geev-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
           <div className="geev-card-body"><strong>{item.title}</strong><span>{item.location_name||"Pranë teje"}</span></div>
         </article>)}
-        {!loading&&filtered.length===0&&<div className="geev-empty-mini">Nuk ka ende dhurata pranë teje.</div>}
+        {!loading&&filtered.length===0&&<div className="geev-empty-mini">Nuk ka ende gjëra pranë teje.</div>}
       </div>
       <div className="geev-mobile-section-head selection-head">
-        <div><h2>Zgjedhja jonë për ty</h2><p>Dhurata të reja që mund të të pëlqejnë</p></div>
+        <div><h2>Zgjedhja jonë për ty</h2><p>Gjëra të reja që mund të të pëlqejnë</p></div>
         <button onClick={()=>{setCategory("Të gjitha");goHome()}}>Shiko të gjitha</button>
       </div>
       <div className="geev-feature-list">
