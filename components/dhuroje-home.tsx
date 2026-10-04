@@ -59,7 +59,7 @@ export default function DhurojeHome(){
   const [listings,setListings]=useState<Listing[]>([]),[images,setImages]=useState<Record<string,string[]>>({});
   const [category,setCategory]=useState<Category>("Të gjitha"),[query,setQuery]=useState("");
   const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
-  const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
+  const [showMoreCategories,setShowMoreCategories]=useState(false),[showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
   const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
   const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
@@ -427,15 +427,23 @@ export default function DhurojeHome(){
       </div>
       <div className="geev-mobile-categories" aria-label="Kategoritë">
         {[
-          ["Të gjitha","✨","Të gjitha"],["Ushqim","🥖","Ushqim"],["Shtëpi","🪑","Shtëpi"],["Veshmbathje","👕","Veshmbathje"],
+          ["Të gjitha","✨","Të gjitha"],["Ushqim","🥖","Ushqim"],["Shtëpi","🪑","Shtëpi"],["Veshmbathje","👕","Veshmbathje"]
+        ].map(([label,icon,value])=>
+          <button key={label} onClick={()=>setCategory(value as Category)} className={category===value?"active":""} aria-label={label}>
+            <span className="geev-cat-icon">{icon}</span><b>{label}</b>
+          </button>
+        )}
+        <button className="geev-more-category" onClick={()=>setShowMoreCategories(x=>!x)} aria-expanded={showMoreCategories}>
+          <span className="geev-cat-icon geev-more-icon">•••</span><b>Më shumë</b>
+        </button>
+        {showMoreCategories&&[
           ["Elektronikë","📱","Elektronikë"],["Fëmijë","🧸","Fëmijë"],["Libra","📚","Libra"],["Të tjera","🎁","Të tjera"]
         ].map(([label,icon,value])=>
           <button key={label} onClick={()=>setCategory(value as Category)} className={category===value?"active":""} aria-label={label}>
             <span className="geev-cat-icon">{icon}</span><b>{label}</b>
           </button>
         )}
-      </div>
-      <div className="geev-promo">
+      </div>      <div className="geev-promo">
         <div className="geev-promo-copy"><strong>Jepu gjërave një<br/><em>jetë të re!</em></strong><span>Dhuro atë që nuk të duhet më.</span><button onClick={openPosting}>Dhuro tani</button></div>
         <div className="geev-promo-art" aria-hidden="true">🎁</div>
       </div>
