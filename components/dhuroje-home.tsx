@@ -349,7 +349,12 @@ export default function DhurojeHome(){
     });
 
     if(e||!conversationId){
-      const detail=e?.message||"Biseda nuk u krijua. Provo përsëri.";
+      const raw=e?.message||"Biseda nuk u krijua. Provo përsëri.";
+      const detail=raw.includes("permission denied for schema private")
+        ?"Mesazhet nuk janë konfiguruar siç duhet në server. Provo përsëri pas pak."
+        :raw.includes("infinite recursion")
+          ?"U gjet një problem sigurie te bisedat. Provo përsëri pas rifreskimit."
+          :raw;
       setMessageConversationId("");
       setShowMessages(false);
       setError("Mesazhet: "+detail);
@@ -409,6 +414,7 @@ export default function DhurojeHome(){
       {showMenu&&<div className="profile-menu">{user?<><strong>{profile?.display_name||user.email}</strong><button onClick={()=>{setShowMessages(true);navigatePage("messages")}}>💬 Mesazhet</button><button onClick={()=>{if(requireAuth()){setShowDashboard(true);navigatePage("dashboard")}}}>📦 Paneli im</button><button onClick={signOut}>Dil</button></>:<button onClick={()=>{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth")}}>Hyr / Regjistrohu</button>}</div>}
     </div></header>
 
+    {error&&<div className="app-error-toast" role="alert"><span>⚠️</span><span>{error}</span><button type="button" onClick={()=>setError("")} aria-label="Mbyll gabimin">×</button></div>}
     <section className="hero"><div><p className="eyebrow">♻️ TREGU FALAS I KOMUNITETIT</p><h1>Gjej. Merr.<br/><span>Dhuro.</span></h1><p className="hero-copy">Gjërat që nuk të duhen më mund t'i gjejnë një shtëpi të re — falas, pranë teje.</p></div><div className="hero-actions"><button className="primary" onClick={()=>openPosting()}>＋ Dhuro një gjë</button>{user&&<button className="secondary" onClick={()=>{setShowDashboard(true);navigatePage("dashboard")}}>Paneli im</button>}</div></section>
     <section className="search-wrap mobile-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Çfarë po kërkon? p.sh. karrige, rroba..."/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></section>
     <section className="categories">{categories.map(x=><button key={x} className={category===x?"chip active":"chip"} onClick={()=>setCategory(x)}><span className="chip-icon">{x==="Të gjitha"?"✨":x==="Ushqim"?"🥖":x==="Veshmbathje"?"👕":x==="Shtëpi"?"🪑":x==="Elektronikë"?"📱":x==="Fëmijë"?"🧸":x==="Libra"?"📚":"🎁"}</span><span>{x}</span></button>)}</section>
@@ -419,7 +425,7 @@ export default function DhurojeHome(){
     {mapMode&&coords&&<section className="map-panel"><iframe title="Harta e Dhuroje" src={"https://www.openstreetmap.org/export/embed.html?bbox="+(coords.lon-.12)+"%2C"+(coords.lat-.08)+"%2C"+(coords.lon+.12)+"%2C"+(coords.lat+.08)+"&layer=mapnik&marker="+coords.lat+"%2C"+coords.lon}/><div className="map-list">{filtered.slice(0,8).map(x=><button key={x.id} onClick={()=>{setActiveListing(x);navigatePage("listing",x.id)}}>{emoji(x.category)} <span><b>{x.title}</b><small>{x.location_name||"Pranë teje"}{distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)!=null?" · "+distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)!.toFixed(1)+" km":""}</small></span></button>)}</div></section>}
 
     <section className="section-head"><div><p className="eyebrow">{nearbyOnly?"PRANË MEJE":"DHURATA TË REJA"}</p><h2>{filtered.length} dhurata falas</h2></div><select className="sort-select" value={sortMode} onChange={e=>setSortMode(e.target.value as "new"|"near")}><option value="new">Më të rejat</option><option value="near" disabled={!coords}>Më të afërtat</option></select></section>
-    {error&&<div className="error">{error}<button onClick={()=>setError("")}>×</button></div>}
+    
     {!mapMode&&<section className="listing-grid">{filtered.map(item=><article className="card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
       <div className="card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<b>FALAS</b><button className="heart" onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}}>{favorites.includes(item.id)?"♥":"♡"}</button></div>
       <div className="card-body"><div className="meta"><span>{categoryLabel[item.category]||item.category}</span><span>📍 {item.location_name||"Pranë teje"}</span></div><button className="poster-line poster-button" onClick={e=>{e.stopPropagation();setPublicProfileId(item.owner_id);navigatePage("profile",item.owner_id)}}>👤 <strong>{item.owner?.display_name||"Përdorues i regjistruar"}</strong> · Shiko profilin</button><h3>{item.title}</h3><p>{item.description||"Pa përshkrim."}</p>
