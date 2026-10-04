@@ -156,12 +156,12 @@ export default function DhurojeHome(){
       (conditionFilter==="all"||x.condition===conditionFilter)&&
       (!favoritesOnly||favorites.includes(x.id))&&
       (!searchCity||x.location_name===searchCity)&&
-      (location==="Lokacioni im" || !cities.includes(location) || x.location_name===location)
+      (pageRoute.page==="explore" || location==="Lokacioni im" || !cities.includes(location) || x.location_name===location)
       );
     if(nearbyOnly&&coords)a=a.filter(x=>{const d=distanceKm(coords.lat,coords.lon,x.latitude,x.longitude);return d!=null&&d<=25;});
     if(sortMode==="near"&&coords)a=[...a].sort((x,y)=>(distanceKm(coords.lat,coords.lon,x.latitude,x.longitude)??9999)-(distanceKm(coords.lat,coords.lon,y.latitude,y.longitude)??9999));
     return a;
-  },[listings,category,query,coords,nearbyOnly,favoritesOnly,favorites,sortMode,searchCity,conditionFilter,location]);
+  },[listings,category,query,coords,nearbyOnly,favoritesOnly,favorites,sortMode,searchCity,conditionFilter,location,pageRoute.page]);
 
   async function requireAuthenticatedUser(){
     const {data,error:e}=await supabase.auth.getUser();
@@ -429,7 +429,7 @@ export default function DhurojeHome(){
 
     {pageRoute.page==="explore"&&<section className="dhuroje-explore-page" aria-label="Eksploro dhuratat">
       <div className="explore-mobile-head">
-        <div className="explore-location"><span>⌖</span><strong>{location}</strong><b>⌄</b></div>
+        <div className="explore-location"><strong>Eksploro</strong></div>
         <div className="explore-head-actions">
           <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Dhurapikë"><span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b></button>
           <button className="explore-search-button" onClick={()=>setExploreSearchOpen(v=>!v)} aria-label="Kërko">⌕</button>
