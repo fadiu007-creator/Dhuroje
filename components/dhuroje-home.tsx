@@ -21,7 +21,11 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promise<File|null>{
   if(!file.type.startsWith("image/"))return null;
   if(file.size>15*1024*1024)throw new Error("Fotoja origjinale duhet të jetë maksimumi 15 MB.");
-  const bitmap=await createImageBitmap(file);
+  const bitmap=await withTimeout(
+    createImageBitmap(file),
+    10000,
+    "Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël."
+  );
   const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
   const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
   const canvas=document.createElement("canvas");
@@ -47,6 +51,18 @@ async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promi
 }
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function withTimeout<T>(promise: PromiseLike<T>, ms:number, message:string):Promise<T>{
+  let timer:ReturnType<typeof setTimeout>|null=null;
+  try{
+    return await Promise.race([
+      promise,
+      new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms);})
+    ]);
+  }finally{
+    if(timer)clearTimeout(timer);
+  }
+}
 
 function distanceKm(a:number|null,b:number|null,c:number|null,d:number|null){
   if(a==null||b==null||c==null||d==null)return null;
@@ -236,21 +252,39 @@ export default function DhurojeHome(){
     if(!files.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return null;}
     // Never create the listing until at least one selected photo is actually ready.
     if(files.length!==photoPreviews.length || photoPreviews.length<1){setPhotoError(true);setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");return null;}
-    const {data:item,error:e1}=await supabase.from("dhuroje_listings").insert({
-      owner_id:postingUser.id,title:String(f.get("title")),description:String(f.get("description")||""),
-      category:categoryDb[String(f.get("category"))]||"other",status:"available",location_name:String(f.get("city")||listingCity||profile?.city||location),
-      latitude:coords?.lat??null,longitude:coords?.lon??null,
+    const itemId=crypto.randomUUID();
+    const listingRow={
+      id:itemId,
+      owner_id:postingUser.id,
+      title:String(f.get("title")||"").trim(),
+      description:String(f.get("description")||"").trim(),
+      category:categoryDb[String(f.get("category"))]||"other",
+      status:"available",
+      location_name:String(f.get("city")||listingCity||profile?.city||location),
+      latitude:coords?.lat??null,
+      longitude:coords?.lon??null,
       condition:categoryDb[String(f.get("category"))]!=="food"?String(f.get("condition")||"good"):null,
-      food_refrigerated:categoryDb[String(f.get("category"))]==="food"&&f.get("food_refrigerated")==="on",food_opened:categoryDb[String(f.get("category"))]==="food"&&f.get("food_opened")==="on"
-    }).select("*").single();
-    if(e1||!item){setError(e1?.message||"Nuk u krijua shpallja.");return null;}
+      food_refrigerated:categoryDb[String(f.get("category"))]==="food"&&f.get("food_refrigerated")==="on",
+      food_opened:categoryDb[String(f.get("category"))]==="food"&&f.get("food_opened")==="on"
+    };
+    const {error:e1}=await withTimeout(
+      supabase.from("dhuroje_listings").insert(listingRow),
+      15000,
+      "Ruajtja e shpalljes mori shumë kohë. Kontrollo internetin dhe provo përsëri."
+    );
+    if(e1){setError(e1.message||"Nuk u krijua shpallja.");return null;}
+    const item=listingRow as Listing;
     const photoCount=Math.min(files.length,6);
     // Upload the first photo separately and verify it is saved before continuing.
     // This prevents the common case where photos 2+ exist but the primary photo is missing.
     const first=files[0];
     const firstExt=first.name.split(".").pop()?.toLowerCase()||"jpg";
     const firstPath=postingUser.id+"/"+item.id+"/0-"+crypto.randomUUID()+"."+firstExt;
-    const firstUpload=await supabase.storage.from("dhuroje-listings").upload(firstPath,first,{contentType:first.type||"image/jpeg",upsert:false});
+    const firstUpload=await withTimeout(
+      supabase.storage.from("dhuroje-listings").upload(firstPath,first,{contentType:first.type||"image/jpeg",upsert:false}),
+      30000,
+      "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
+    );
     if(firstUpload.error){
       setPhotoError(true);
       setError("Fotoja e parë nuk u ngarkua. Prit derisa fotoja të jetë gati dhe provo përsëri.");
@@ -277,7 +311,11 @@ export default function DhurojeHome(){
 
     for(let i=1;i<photoCount;i++){
       const file=files[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg",path=postingUser.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
-      const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
+      const up=await withTimeout(
+        supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false}),
+        30000,
+        "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
+      );
       if(up.error){setError("Një foto nuk u ngarkua. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
       const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
       if(imageError){await supabase.storage.from("dhuroje-listings").remove([path]);setError("Një foto nuk u ruajt. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
@@ -431,18 +469,46 @@ export default function DhurojeHome(){
   const activeExploreFilters=(category!=="Të gjitha"?1:0)+(searchCity?1:0)+(conditionFilter!=="all"?1:0)+(nearbyOnly?1:0);
 
   async function createRequest(e:FormEvent<HTMLFormElement>){
-    e.preventDefault(); setError(""); setRequestSaving(true);
-    const currentUser=await requireAuthenticatedUser(); if(!currentUser){setRequestSaving(false);return;}
-    const f=new FormData(e.currentTarget);
-    const {data,error:e1}=await supabase.from("dhuroje_requests").insert({
-      requester_id:currentUser.id,
-      title:String(f.get("title")||"").trim(),
-      description:String(f.get("description")||"").trim()||null,
-      category:String(f.get("category")||"other"),
-      location_name:String(f.get("location_name")||"").trim()||profile?.city||null
-    }).select("*").single();
-    if(e1){setError(e1.message);setRequestSaving(false);return;}
-    setRequests(x=>[data,...x]);setShowRequestForm(false);setExploreTab("requests");setRequestSaving(false);
+    e.preventDefault();
+    if(requestSaving)return;
+    setError("");
+    setRequestSaving(true);
+    try{
+      const currentUser=await withTimeout(
+        requireAuthenticatedUser(),
+        10000,
+        "Hyrja në llogari po zgjat shumë. Rifresko faqen dhe provo përsëri."
+      );
+      if(!currentUser)return;
+      const f=new FormData(e.currentTarget);
+      const title=String(f.get("title")||"").trim();
+      const description=String(f.get("description")||"").trim();
+      const category=String(f.get("category")||"other");
+      const location_name=String(f.get("location_name")||"").trim()||profile?.city||null;
+      if(!title){
+        setError("Ju lutem shkruani çfarë po kërkoni.");
+        return;
+      }
+      const requestId=crypto.randomUUID();
+      const row={id:requestId,requester_id:currentUser.id,title,description:description||null,category,location_name,status:"open",created_at:new Date().toISOString()};
+      const {error:e1}=await withTimeout(
+        supabase.from("dhuroje_requests").insert(row),
+        15000,
+        "Ruajtja e kërkesës mori shumë kohë. Kontrollo internetin dhe provo përsëri."
+      );
+      if(e1){
+        setError(e1.message||"Kërkesa nuk u ruajt.");
+        return;
+      }
+      setRequests(x=>[row,...x]);
+      setRequestDraft({title:"",category:"other",location_name:profile?.city||"Ferizaj",description:""});
+      setShowRequestForm(false);
+      setExploreTab("requests");
+    }catch(err:any){
+      setError(err?.message||"Kërkesa nuk u ruajt. Provo përsëri.");
+    }finally{
+      setRequestSaving(false);
+    }
   }
 
   return <main className={pageRoute.page==="explore"?"explore-route":""}>
