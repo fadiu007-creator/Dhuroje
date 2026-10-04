@@ -415,6 +415,45 @@ export default function DhurojeHome(){
     </div></header>
 
     {error&&<div className="app-error-toast" role="alert"><span>⚠️</span><span>{error}</span><button type="button" onClick={()=>setError("")} aria-label="Mbyll gabimin">×</button></div>}
+
+    <section className="geev-mobile-home" aria-label="Faqja kryesore Dhuroje">
+      <div className="geev-mobile-location">
+        <button onClick={locate} aria-label="Ndrysho lokacionin"><span>{location}</span><b>⌄</b></button>
+        <div className="geev-mobile-head-actions">
+          <button onClick={openNotifications} aria-label="Njoftimet">♧</button>
+          <button onClick={()=>user?openProfile():setShowMenu(!showMenu)} aria-label="Profili">●</button>
+        </div>
+      </div>
+      <div className="geev-mobile-categories">
+        
+      </div>
+      <div className="geev-promo">
+        <div className="geev-promo-copy"><strong>Jepu gjërave një<br/><em>jetë të re!</em></strong><span>Dhuro atë që nuk të duhet më.</span><button onClick={openPosting}>Dhuro tani</button></div>
+        <div className="geev-promo-art" aria-hidden="true">🎁</div>
+      </div>
+      <div className="geev-dots"><i></i><i></i></div>
+      <div className="geev-mobile-section-head">
+        <div><h2>Dhurata pranë teje</h2><p>{location}</p></div>
+        <button onClick={()=>{setNearbyOnly(true);if(!coords)locate();}}>Shiko të gjitha</button>
+      </div>
+      <div className="geev-horizontal-list">
+        {filtered.slice(0,6).map(item=><article className="geev-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
+          <div className="geev-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
+          <div className="geev-card-body"><strong>{item.title}</strong><span>{item.location_name||"Pranë teje"}</span></div>
+        </article>)}
+        {!loading&&filtered.length===0&&<div className="geev-empty-mini">Nuk ka ende dhurata pranë teje.</div>}
+      </div>
+      <div className="geev-mobile-section-head selection-head">
+        <div><h2>Zgjedhja jonë për ty</h2><p>Dhurata të reja që mund të të pëlqejnë</p></div>
+        <button onClick={()=>{setCategory("Të gjitha");goHome()}}>Shiko të gjitha</button>
+      </div>
+      <div className="geev-feature-list">
+        {filtered.slice(6,12).map(item=><article className="geev-feature-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
+          <div className="geev-feature-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}</div>
+          <div><strong>{item.title}</strong><small>{categoryLabel[item.category]||item.category} · {item.location_name||"Pranë teje"}</small></div>
+        </article>)}
+      </div>
+    </section>
     <section className="hero"><div><p className="eyebrow">♻️ TREGU FALAS I KOMUNITETIT</p><h1>Gjej. Merr.<br/><span>Dhuro.</span></h1><p className="hero-copy">Gjërat që nuk të duhen më mund t'i gjejnë një shtëpi të re — falas, pranë teje.</p></div><div className="hero-actions"><button className="primary" onClick={()=>openPosting()}>＋ Dhuro një gjë</button>{user&&<button className="secondary" onClick={()=>{setShowDashboard(true);navigatePage("dashboard")}}>Paneli im</button>}</div></section>
     <section className="search-wrap mobile-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Çfarë po kërkon? p.sh. karrige, rroba..."/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></section>
     <section className="categories">{categories.map(x=><button key={x} className={category===x?"chip active":"chip"} onClick={()=>setCategory(x)}><span className="chip-icon">{x==="Të gjitha"?"✨":x==="Ushqim"?"🥖":x==="Veshmbathje"?"👕":x==="Shtëpi"?"🪑":x==="Elektronikë"?"📱":x==="Fëmijë"?"🧸":x==="Libra"?"📚":"🎁"}</span><span>{x}</span></button>)}</section>
