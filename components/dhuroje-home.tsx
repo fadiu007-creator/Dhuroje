@@ -663,7 +663,10 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
 
   async function load(){
     if(!user)return;
-    await supabase.rpc("dhuroje_cleanup_empty_conversations");
+    // Do not clean up an empty draft here. A newly opened chat is intentionally
+    // empty until the user sends the first message; deleting it here makes Inbox
+    // appear empty immediately after choosing “Mesazho dhuruesin”.
+
     setLoading(true);setError("");
     const {data:members,error:memberError}=await supabase.from("dhuroje_conversation_members").select("conversation_id").eq("user_id",user.id);
     if(memberError){setError("Nuk mund të ngarkoheshin bisedat. Provo përsëri.");setLoading(false);return;}
