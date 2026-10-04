@@ -65,6 +65,7 @@ export default function DhurojeHome(){
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
   const [listingCity,setListingCity]=useState(""),[showFilters,setShowFilters]=useState(false),[searchCity,setSearchCity]=useState(""),[conditionFilter,setConditionFilter]=useState<"all"|"new"|"good"|"worn"|"broken">("all"),[exploreSearchOpen,setExploreSearchOpen]=useState(false),[exploreTab,setExploreTab]=useState<"things"|"food"|"requests">("things");
+  const [requests,setRequests]=useState<any[]>([]),[showRequestForm,setShowRequestForm]=useState(false),[requestSaving,setRequestSaving]=useState(false);
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
   function navigatePage(page:string,id?:string,conversation?:string){
@@ -104,6 +105,10 @@ export default function DhurojeHome(){
       ]);
       setProfile(p.data);setDhurapike(Number.isFinite(Number(p.data?.dhurapike))?Number(p.data.dhurapike):10);setListingCity(p.data?.city||"");setLocation(p.data?.city||"Ferizaj");setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
     } else {setProfile(null);setFavorites([]);setClaims([]);}
+    if(u){
+      const {data:rs,error:re}=await supabase.from("dhuroje_requests").select("*").eq("requester_id",u.id).order("created_at",{ascending:false});
+      if(re)setError(re.message); else setRequests(rs||[]);
+    } else setRequests([]);
     setLoading(false);
   }
 
@@ -419,6 +424,21 @@ export default function DhurojeHome(){
 
   const activeExploreFilters=(category!=="Të gjitha"?1:0)+(searchCity?1:0)+(conditionFilter!=="all"?1:0)+(nearbyOnly?1:0);
 
+  async function createRequest(e:FormEvent<HTMLFormElement>){
+    e.preventDefault(); setError("");
+    const currentUser=await requireAuthenticatedUser(); if(!currentUser)return;
+    const f=new FormData(e.currentTarget);
+    const {data,error:e1}=await supabase.from("dhuroje_requests").insert({
+      requester_id:currentUser.id,
+      title:String(f.get("title")||"").trim(),
+      description:String(f.get("description")||"").trim()||null,
+      category:String(f.get("category")||"other"),
+      location_name:String(f.get("location_name")||"").trim()||profile?.city||null
+    }).select("*").single();
+    if(e1){setError(e1.message);return;}
+    setRequests(x=>[data,...x]);setShowRequestForm(false);setExploreTab("requests");
+  }
+
   return <main className={pageRoute.page==="explore"?"explore-route":""}>
     <header className="topbar"><div className="brand"><span className="brand-mark">D</span><span>Dhuroje</span></div><div className="header-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko"/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></div><nav className="top-nav"><button className="top-nav-active" onClick={()=>{setFavoritesOnly(false);setMapMode(false);goHome()}}><span aria-hidden="true">🔎</span> Eksploro</button><button onClick={()=>{if(user){setFavoritesOnly(true);setMapMode(false);navigatePage("saved")}else{setShowAuth(true);setAuthMode("login");navigatePage("auth")}}}><span aria-hidden="true">♡</span> Të ruajturat</button></nav><div className="top-actions">
       <button className="header-link" onClick={()=>openPosting()}><span aria-hidden="true">🎁</span> Dhuro</button>{user&&<button className="notification-button" aria-label="Njoftimet" onClick={openNotifications}>🔔{notificationCount>0&&<span>{notificationCount>99?"99+":notificationCount}</span>}</button>}<button className="profile-button" aria-label="Profili" onClick={()=>user?openProfile():setShowMenu(!showMenu)}>●</button>
@@ -450,7 +470,18 @@ export default function DhurojeHome(){
         {exploreTab==="things"&&<div><strong>Gjendja e objektit</strong><div className="explore-filter-options">{[["all","All"],["new","Like new"],["good","Good condition"],["worn","Worn"],["broken","Broken"]].map(([v,l])=><button key={v} className={conditionFilter===v?"active":""} onClick={()=>setConditionFilter(v as typeof conditionFilter)}>{l}</button>)}</div></div>}
         <div className="explore-filter-actions"><button onClick={()=>{setCategory(exploreTab==="food"?"Ushqim":"Të gjitha");setSearchCity("");setConditionFilter("all");setNearbyOnly(false);setShowFilters(false)}}>Pastro filtrat</button><strong>{filtered.length} rezultate</strong></div>
       </div>}
-      {exploreTab==="requests"?<div className="explore-empty explore-requests-empty"><strong>Kërkesat</strong><span>Këtu do të shfaqen kërkesat e përdoruesve për gjërat që u nevojiten.</span></div>:<><div className="explore-result-head"><strong>{filtered.length} {exploreTab==="food"?"ushqime":"gjëra"}</strong><span>{location}</span></div>
+      {exploreTab==="requests"?<div className="explore-requests-page">
+        <div className="explore-requests-head"><div><strong>Kërkesat e mia</strong><span>Gjëra që po kërkon nga komuniteti.</span></div><button onClick={()=>{if(requireAuth())setShowRequestForm(true)}}>+ Kërko diçka</button></div>
+        {showRequestForm&&<form className="explore-request-form" onSubmit={createRequest}>
+          <label>Çfarë po kërkon?<input name="title" required maxLength={100} placeholder="p.sh. tavolinë, rroba fëmijësh..." /></label>
+          <label>Kategoria<select name="category" defaultValue="other">{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
+          <label>Qyteti<select name="location_name" defaultValue={profile?.city||"Ferizaj"}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
+          <label>Përshkrimi<textarea name="description" rows={3} maxLength={500} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
+          <div><button type="button" onClick={()=>setShowRequestForm(false)}>Anulo</button><button type="submit" disabled={requestSaving}>{requestSaving?"Po ruhet...":"Publiko kërkesën"}</button></div>
+        </form>}
+        {!showRequestForm&&requests.length===0&&<div className="explore-empty explore-requests-empty"><strong>Nuk ke bërë ende kërkesa.</strong><span>Krijo një kërkesë dhe komuniteti mund të të ndihmojë.</span></div>}
+        <div className="explore-request-list">{requests.map((r:any)=><article className="explore-request-card" key={r.id}><div><strong>{r.title}</strong><span>{categoryLabel[r.category]||"Të tjera"} · {r.location_name||"Pa qytet"}</span>{r.description&&<p>{r.description}</p>}</div><small>{r.status==="open"?"E hapur":r.status==="fulfilled"?"U plotësua":"Mbyllur"}</small></article>)}</div>
+      </div>:<><div className="explore-result-head"><strong>{filtered.length} {exploreTab==="food"?"ushqime":"gjëra"}</strong><span>{location}</span></div>
       <div className="explore-grid">{filtered.map(item=><article className="explore-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
         <div className="explore-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
         <div className="explore-card-body"><strong>{item.title}</strong><span>⌖ {item.location_name||"Pranë teje"}{coords&&distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!=null?" · "+distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!.toFixed(0)+" km":""}</span></div>
