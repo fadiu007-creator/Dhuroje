@@ -114,32 +114,15 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms:number, message:string
 
 
 async function uploadDhurojePhoto(path:string,file:File):Promise<{data:any;error:any}>{
-  // Use the same upload format as the working request flow: normalize the
-  // file into an actual Blob/File before handing it to Supabase Storage.
-  let uploadFile=file;
   try{
-    if(file.type!=="image/webp"&&file.type!=="image/jpeg"&&file.type!=="image/png"){
-      const normalized=await compressImage(file,1200,5*1024*1024);
-      if(normalized)uploadFile=normalized;
-    }
-  }catch(err:any){
-    return {data:null,error:err};
+    return await withTimeout(
+      supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type,upsert:false}),
+      30000,
+      "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
+    );
+  }catch(error:any){
+    return {data:null,error};
   }
-  const mime=/^(image\/(webp|jpeg|png))$/i.test(uploadFile.type)?uploadFile.type.toLowerCase():"image/jpeg";
-  let lastError:any=null;
-  for(let attempt=0;attempt<3;attempt++){
-    try{
-      const result=await withTimeout(
-        supabase.storage.from("dhuroje-listings").upload(path,uploadFile,{contentType:mime,cacheControl:"31536000",upsert:false}),
-        30000,
-        "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
-      );
-      if(!result.error)return result;
-      lastError=result.error;
-    }catch(err:any){lastError=err;}
-    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));
-  }
-  return {data:null,error:lastError||new Error("Ngarkimi i fotos dështoi.")};
 }
 function distanceKm(a:number|null,b:number|null,c:number|null,d:number|null){
   if(a==null||b==null||c==null||d==null)return null;
@@ -334,78 +317,58 @@ export default function DhurojeHome(){
     const description=String(f.get("description")||"").trim();
     if(!description){setError("Ju lutem plotësoni përshkrimin.");return null;}
     const files=filesOverride?.length?filesOverride:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
-    if(!files.length){setPhotoError(true);setError("Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.");return null;}
-    // Never create the listing until at least one selected photo is actually ready.
-    if(files.length!==photoPreviews.length || photoPreviews.length<1){setPhotoError(true);setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");return null;}
+    if(!files.length){setPhotoError(true);setError("Ju lutem shtoni të paktën 1 foto.");return null;}
+
     const itemId=crypto.randomUUID();
+    const category=categoryDb[String(f.get("category"))]||"other";
     const listingRow={
-      id:itemId,
-      owner_id:postingUser.id,
-      title:String(f.get("title")||"").trim(),
-      description:String(f.get("description")||"").trim(),
-      category:categoryDb[String(f.get("category"))]||"other",
-      status:"available",
+      id:itemId,owner_id:postingUser.id,title:String(f.get("title")||"").trim(),description,
+      category,status:"available",
       location_name:String(f.get("city")||listingCity||profile?.city||location),
-      latitude:coords?.lat??null,
-      longitude:coords?.lon??null,
-      condition:categoryDb[String(f.get("category"))]!=="food"?String(f.get("condition")||"good"):null,
-      food_refrigerated:categoryDb[String(f.get("category"))]==="food"&&f.get("food_refrigerated")==="on",
-      food_opened:categoryDb[String(f.get("category"))]==="food"&&f.get("food_opened")==="on"
+      latitude:coords?.lat??null,longitude:coords?.lon??null,
+      condition:category!=="food"?String(f.get("condition")||"good"):null,
+      food_refrigerated:category==="food"&&f.get("food_refrigerated")==="on",
+      food_opened:category==="food"&&f.get("food_opened")==="on"
     };
-    const {error:e1}=await withTimeout(
-      supabase.from("dhuroje_listings").insert(listingRow),
-      15000,
-      "Ruajtja e shpalljes mori shumë kohë. Kontrollo internetin dhe provo përsëri."
-    );
-    if(e1){setError(e1.message||"Nuk u krijua shpallja.");return null;}
-    const item=listingRow as Listing;
-    const photoCount=Math.min(files.length,6);
-    // Upload the first photo separately and verify it is saved before continuing.
-    // This prevents the common case where photos 2+ exist but the primary photo is missing.
-    const first=files[0];
-    const firstExt=first.name.split(".").pop()?.toLowerCase()||"jpg";
-    const firstPath=postingUser.id+"/"+item.id+"/0-"+crypto.randomUUID()+"."+firstExt;
-    // Same resilient uploader used by the working request-photo flow.
-    let firstUpload;
-    try{ firstUpload=await uploadDhurojePhoto(firstPath,first); }
-    catch(err:any){
-      setPhotoError(true);
-      setError("Fotoja e parë nuk u ngarkua: "+(err?.message||"gabim i Storage."));
-      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
-      return null;
-    }
-    if(firstUpload.error){
-      setPhotoError(true);
-      setError("Fotoja e parë nuk u ngarkua: "+(firstUpload.error.message||"gabim i Storage."));
-      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
-      return null;
-    }
-    const {error:firstImageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:firstPath,sort_order:0});
-    if(firstImageError){
-      await supabase.storage.from("dhuroje-listings").remove([firstPath]);
-      setPhotoError(true);
-      setError("Fotoja e parë nuk u ruajt. Prit derisa fotoja të jetë gati dhe provo përsëri.");
-      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
-      return null;
-    }
 
-    // Confirm the primary image row exists before uploading the remaining photos.
-    const {data:firstSaved}=await supabase.from("dhuroje_listing_images").select("id,storage_path").eq("listing_id",item.id).eq("sort_order",0).maybeSingle();
-    if(!firstSaved){
+    const uploadedPaths:string[]=[];
+    try{
+      // Nothing happens while selecting photos. On publish, each photo is compressed
+      // in the background, uploaded, and only then referenced by the database.
+      for(let i=0;i<Math.min(files.length,6);i++){
+        const compressed=await compressImage(files[i],1200,500*1024);
+        if(!compressed)throw new Error("Fotoja "+(i+1)+" nuk mund të përpunohej.");
+        const ext=compressed.type==="image/webp"?"webp":"jpg";
+        const path=postingUser.id+"/pending-"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
+        const up=await uploadDhurojePhoto(path,compressed);
+        if(up.error)throw new Error("Fotoja "+(i+1)+" nuk u ngarkua: "+(up.error.message||"Failed to fetch"));
+        uploadedPaths.push(path);
+      }
+
+      const {error:e1}=await withTimeout(
+        supabase.from("dhuroje_listings").insert(listingRow),
+        15000,
+        "Ruajtja e shpalljes mori shumë kohë. Kontrollo internetin dhe provo përsëri."
+      );
+      if(e1)throw e1;
+
+      for(let i=0;i<uploadedPaths.length;i++){
+        const ext=uploadedPaths[i].endsWith(".webp")?"webp":"jpg";
+        const finalPath=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
+        const {error:copyError}=await supabase.storage.from("dhuroje-listings").copy(uploadedPaths[i],finalPath);
+        if(copyError)throw copyError;
+        const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:itemId,storage_path:finalPath,sort_order:i});
+        if(imageError)throw imageError;
+        await supabase.storage.from("dhuroje-listings").remove([uploadedPaths[i]]);
+      }
+      return listingRow as Listing;
+    }catch(err:any){
+      if(uploadedPaths.length)await supabase.storage.from("dhuroje-listings").remove(uploadedPaths);
+      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:itemId});
       setPhotoError(true);
-      setError("Fotoja e parë nuk është ende gati. Provo përsëri pasi të shfaqet në miniaturë.");
-      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
+      setError(err?.message||"Fotot nuk u ngarkuan. Provo përsëri.");
       return null;
     }
-
-    for(let i=1;i<photoCount;i++){
-      const file=files[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg",path=postingUser.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
-      const up=await uploadDhurojePhoto(path,file);
-      if(up.error){setError("Një foto nuk u ngarkua. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
-      const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
-      if(imageError){await supabase.storage.from("dhuroje-listings").remove([path]);setError("Një foto nuk u ruajt. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
-    }
-    return item as Listing;
   }
   async function createListing(e:FormEvent<HTMLFormElement>){
     e.preventDefault();
@@ -415,7 +378,7 @@ export default function DhurojeHome(){
     const description=String(f.get("description")||"").trim();
     if(!description){setError("Ju lutem plotësoni përshkrimin.");return;}
     const selectedPhotos=selectedPhotoFiles.length?selectedPhotoFiles:Array.from(f.getAll("photos")).filter((x):x is File=>x instanceof File&&x.size>0);
-    if(!selectedPhotos.length || selectedPhotos.length!==photoPreviews.length){
+    if(!selectedPhotos.length){
       setPhotoError(true);
       setError("Prit derisa fotoja të shfaqet në miniaturë para publikimit.");
       return;
@@ -754,7 +717,7 @@ export default function DhurojeHome(){
     {showGive&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card listing-form-card" onSubmit={createListing}><div className="request-form-head"><div><p className="eyebrow">DHUROJE</p><h2>Çfarë dëshiron të dhurosh?</h2><span>Publiko diçka që nuk e përdor më dhe mund t’i nevojitet dikujt.</span></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       {postingCategory!=="Ushqim"&&<label>Gjendja e objektit<select name="condition" defaultValue="good" required><option value="new">Like new</option><option value="good">Good condition</option><option value="worn">Worn</option><option value="broken">Broken</option></select></label>}
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*,.heic,.heif" multiple onChange={async e=>{const input=e.currentTarget;const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){try{setPhotoError(false);setError("");const compressed:File[]=[];for(const file of files){const result=await compressImage(file,1200,500*1024);if(result)compressed.push(result);}const next=[...selectedPhotoFiles,...compressed].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!compressed.length)throw new Error("Nuk u zgjodh asnjë foto e vlefshme.");}catch(err:any){setPhotoError(true);setError(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto. Kompresohen automatikisht në WebP, deri në 500 KB secila.</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*,.heic,.heif" multiple onChange={e=>{const input=e.currentTarget;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){setPhotoError(false);setError("");const next=[...selectedPhotoFiles,...files].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));}input.value="";}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto. Fotot kompresohen automatikisht gjatë publikimit dhe ruhen deri në 500 KB secila.</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
 <button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
