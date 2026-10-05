@@ -47,7 +47,14 @@ async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promi
     }),10000,"Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël.");
   }catch{
     if(objectUrl)URL.revokeObjectURL(objectUrl);
-    throw new Error("Fotoja nuk mund të lexohej. Provo JPG, PNG ose WebP.");
+    // Some Android gallery/browser combinations expose a valid image file
+    // that the browser decoder cannot render. Do not block publishing it.
+    if(source.size<=15*1024*1024){
+      const type=source.type||file.type||"image/jpeg";
+      const ext=type==="image/png"?"png":type==="image/webp"?"webp":type==="image/jpeg"?"jpg":"jpg";
+      return new File([source],"photo."+ext,{type,lastModified:Date.now()});
+    }
+    throw new Error("Ky format fotografie nuk mbështetet nga shfletuesi. Provo JPG ose PNG.");
   }finally{
     if(objectUrl)URL.revokeObjectURL(objectUrl);
   }
