@@ -339,7 +339,7 @@ export default function DhurojeHome(){
         const compressed=await compressImage(files[i],1200,500*1024);
         if(!compressed)throw new Error("Fotoja "+(i+1)+" nuk mund të përpunohej.");
         const ext=compressed.type==="image/webp"?"webp":"jpg";
-        const path=postingUser.id+"/pending-"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
+        const path=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
         const up=await uploadDhurojePhoto(path,compressed);
         if(up.error)throw new Error("Fotoja "+(i+1)+" nuk u ngarkua: "+(up.error.message||"Failed to fetch"));
         uploadedPaths.push(path);
@@ -353,13 +353,10 @@ export default function DhurojeHome(){
       if(e1)throw e1;
 
       for(let i=0;i<uploadedPaths.length;i++){
-        const ext=uploadedPaths[i].endsWith(".webp")?"webp":"jpg";
-        const finalPath=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
-        const {error:copyError}=await supabase.storage.from("dhuroje-listings").copy(uploadedPaths[i],finalPath);
-        if(copyError)throw copyError;
-        const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:itemId,storage_path:finalPath,sort_order:i});
+        const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({
+          listing_id:itemId,storage_path:uploadedPaths[i],sort_order:i
+        });
         if(imageError)throw imageError;
-        await supabase.storage.from("dhuroje-listings").remove([uploadedPaths[i]]);
       }
       return listingRow as Listing;
     }catch(err:any){
