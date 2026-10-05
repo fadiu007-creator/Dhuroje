@@ -330,7 +330,7 @@ export default function DhurojeHome(){
     const firstPath=postingUser.id+"/"+item.id+"/0-"+crypto.randomUUID()+"."+firstExt;
     // Storage is configured for image files; always send an allowed MIME type and
     // surface the real storage error instead of hiding it behind a generic message.
-    const firstMime=/^(image\\/(webp|jpeg|png))$/i.test(first.type)?first.type.toLowerCase():"image/jpeg";
+    const firstMime=/^(image\/(webp|jpeg|png))$/i.test(first.type)?first.type.toLowerCase():"image/jpeg";
     const firstUpload=await withTimeout(
       supabase.storage.from("dhuroje-listings").upload(firstPath,first,{contentType:firstMime,cacheControl:"31536000",upsert:false}),
       30000,
