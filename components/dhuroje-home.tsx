@@ -171,7 +171,15 @@ export default function DhurojeHome(){
     } else {setProfile(null);setFavorites([]);setClaims([]);}
     // Community requests are public; authentication is only required to create or act on one.
     const {data:rs,error:re}=await supabase.from("dhuroje_requests").select("*").eq("status","open").order("created_at",{ascending:false});
-    if(re)setError(re.message); else setRequests(rs||[]);
+    if(re)setError(re.message); else {
+      setRequests(rs||[]);
+      if((rs||[]).length){
+        const {data:ris}=await supabase.from("dhuroje_request_images").select("request_id,storage_path").in("request_id",(rs||[]).map((x:any)=>x.id));
+        const grouped:Record<string,string>={};
+        (ris||[]).forEach((im:any)=>{if(!grouped[im.request_id])grouped[im.request_id]=supabase.storage.from("dhuroje-listings").getPublicUrl(im.storage_path).data.publicUrl;});
+        setRequestImages(grouped);
+      } else setRequestImages({});
+    }
     setLoading(false);
   }
 
@@ -491,6 +499,7 @@ export default function DhurojeHome(){
   function openCreateMenu(){setShowCreateMenu(true);setPostChoice(false);setShowGive(false);setShowAuth(false);navigatePage("create");}
   function openRequestCreation(){
     if(!requireAuth())return;
+    setRequestPhoto(null);setRequestPhotoPreview("");
     setRequestDraft({title:"",category:"other",location_name:profile?.city||"Ferizaj",description:""});
     setShowRequestForm(true);setShowCreateMenu(false);setExploreTab("requests");navigatePage("explore");
   }
@@ -571,8 +580,28 @@ export default function DhurojeHome(){
         setError(e1.message||"Kërkesa nuk u ruajt.");
         return;
       }
+      if(requestPhoto){
+        const ext=requestPhoto.name.split(".").pop()?.toLowerCase()||"jpg";
+        const path=currentUser.id+"/requests/"+requestId+"/"+crypto.randomUUID()+"."+ext;
+        const mime=/^(image\/(webp|jpeg|png))$/i.test(requestPhoto.type)?requestPhoto.type.toLowerCase():"image/jpeg";
+        const up=await withTimeout(supabase.storage.from("dhuroje-listings").upload(path,requestPhoto,{contentType:mime,cacheControl:"31536000",upsert:false}),30000,"Ngarkimi i fotos së kërkesës po zgjat shumë. Kontrollo internetin dhe provo përsëri.");
+        if(up.error){
+          await supabase.from("dhuroje_requests").delete().eq("id",requestId);
+          setError("Fotoja e kërkesës nuk u ngarkua: "+(up.error.message||"gabim i Storage."));
+          return;
+        }
+        const {error:rie}=await supabase.from("dhuroje_request_images").insert({request_id:requestId,storage_path:path});
+        if(rie){
+          await supabase.storage.from("dhuroje-listings").remove([path]);
+          await supabase.from("dhuroje_requests").delete().eq("id",requestId);
+          setError("Fotoja e kërkesës nuk u ruajt.");
+          return;
+        }
+        setRequestImages(x=>({...x,[requestId]:supabase.storage.from("dhuroje-listings").getPublicUrl(path).data.publicUrl}));
+      }
       setRequests(x=>[row,...x]);
       setRequestDraft({title:"",category:"other",location_name:profile?.city||"Ferizaj",description:""});
+      setRequestPhoto(null);setRequestPhotoPreview("");
       setShowRequestForm(false);
       setExploreTab("requests");
     }catch(err:any){
@@ -618,6 +647,7 @@ export default function DhurojeHome(){
         
         {!showRequestForm&&requests.length===0&&<div className="explore-empty explore-requests-empty"><strong>Nuk ka ende kërkesa.</strong><span>Bëhu i pari që kërkon diçka nga komuniteti.</span></div>}
         <div className="explore-request-list">{requests.map((r:any)=><article className="explore-request-card" key={r.id}>
+          {requestImages[r.id]&&<img className="explore-request-photo" src={requestImages[r.id]} alt="" />}
           <div><strong>{r.title}</strong><span>{categoryLabel[r.category]||"Të tjera"} · {r.location_name||"Pa qytet"}</span>{r.description&&<p>{r.description}</p>}</div>
           <div className="explore-request-actions"><small>E kërkuar</small><button type="button" onClick={()=>{if(!requireAuth())return;setRequestDraft({title:r.title,category:r.category||"other",location_name:r.location_name||profile?.city||"Ferizaj",description:r.description||""});setShowRequestForm(true);}}>Kërko këtë dhuratë</button></div>
         </article>)}</div>
@@ -711,6 +741,7 @@ export default function DhurojeHome(){
       <label>Kategoria<select name="category" value={requestDraft.category} onChange={e=>setRequestDraft(v=>({...v,category:e.target.value}))}>{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
       <label>Qyteti<select name="location_name" value={requestDraft.location_name} onChange={e=>setRequestDraft(v=>({...v,location_name:e.target.value}))}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
       <label>Përshkrimi<textarea name="description" rows={4} maxLength={500} value={requestDraft.description} onChange={e=>setRequestDraft(v=>({...v,description:e.target.value}))} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
+      <div className="photo-picker request-photo-picker"><span className="photo-label">Foto <small>(opsionale)</small></span><label className="photo-button">➕ Shto foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=Array.from(input.files||[])[0];if(!file)return;try{setError("");const compressed=await compressImage(file,1200,500*1024);if(compressed){setRequestPhoto(compressed);setRequestPhotoPreview(URL.createObjectURL(compressed));}}catch(err:any){setError(err?.message||"Fotoja nuk mund të përpunohej.");}finally{input.value="";}}}/></label>{requestPhotoPreview&&<div className="photo-thumbnails"><div className="photo-thumbnail"><img src={requestPhotoPreview} alt="Foto e kërkesës"/><button type="button" className="photo-remove" onClick={()=>{setRequestPhoto(null);setRequestPhotoPreview("");}}>×</button></div></div>}<small className="form-help">Maksimum 1 foto, kompresohet automatikisht deri në 500 KB.</small></div>
       {error&&<div className="form-inline-error" role="alert">{error}</div>}
       <div className="request-form-actions"><button type="button" onClick={()=>setShowRequestForm(false)}>Anulo</button><button className="primary" type="submit" disabled={requestSaving}>{requestSaving?"Po ruhet...":"Publiko kërkesën"}</button></div>
     </form></div></div>}
