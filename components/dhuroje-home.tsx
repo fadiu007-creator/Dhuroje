@@ -30,30 +30,36 @@ async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promi
       const convert=(mod as any).default||mod;
       const converted=await convert({blob:file,toType:"image/jpeg",quality:.88});
       source=Array.isArray(converted)?converted[0]:converted;
-    }catch(err){
+    }catch{
       throw new Error("Ky format HEIC/HEIF nuk mund të lexohet. Ruaje foton si JPG dhe provo përsëri.");
     }
   }
 
-  let bitmap:ImageBitmap;
+  let image:HTMLImageElement|null=null;
+  let objectUrl:string|null=null;
   try{
-    bitmap=await withTimeout(
-      createImageBitmap(source),
-      10000,
-      "Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël."
-    );
+    objectUrl=URL.createObjectURL(source);
+    image=await withTimeout(new Promise<HTMLImageElement>((resolve,reject)=>{
+      const img=new Image();
+      img.onload=()=>resolve(img);
+      img.onerror=()=>reject(new Error("decode"));
+      img.src=objectUrl!;
+    }),10000,"Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël.");
   }catch{
+    if(objectUrl)URL.revokeObjectURL(objectUrl);
     throw new Error("Fotoja nuk mund të lexohej. Provo JPG, PNG ose WebP.");
+  }finally{
+    if(objectUrl)URL.revokeObjectURL(objectUrl);
   }
 
-  const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
-  const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
+  const scale=Math.min(1,maxDimension/Math.max(image.naturalWidth,image.naturalHeight));
+  const width=Math.max(1,Math.round(image.naturalWidth*scale));
+  const height=Math.max(1,Math.round(image.naturalHeight*scale));
   const canvas=document.createElement("canvas");
   canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext("2d");
-  if(!ctx){bitmap.close();throw new Error("Nuk mund të përpunohej fotoja.");}
-  ctx.drawImage(bitmap,0,0,width,height);
-  bitmap.close();
+  if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
+  ctx.drawImage(image,0,0,width,height);
 
   const makeBlob=(type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
   let blob:Blob|null=null;
@@ -665,7 +671,7 @@ export default function DhurojeHome(){
     {showGive&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card listing-form-card" onSubmit={createListing}><div className="request-form-head"><div><p className="eyebrow">DHUROJE</p><h2>Çfarë dëshiron të dhurosh?</h2><span>Publiko diçka që nuk e përdor më dhe mund t’i nevojitet dikujt.</span></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       {postingCategory!=="Ushqim"&&<label>Gjendja e objektit<select name="condition" defaultValue="good" required><option value="new">Like new</option><option value="good">Good condition</option><option value="worn">Worn</option><option value="broken">Broken</option></select></label>}
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*" multiple onChange={async e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){try{setPhotoError(false);setError("");const compressed:File[]=[];for(const file of files){const result=await compressImage(file,1200,500*1024);if(result)compressed.push(result);}const next=[...selectedPhotoFiles,...compressed].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!compressed.length)throw new Error("Nuk u zgjodh asnjë foto e vlefshme.");}catch(err:any){setPhotoError(true);setError(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto. Kompresohen automatikisht në WebP, deri në 500 KB secila.</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*,.heic,.heif" multiple onChange={async e=>{const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){try{setPhotoError(false);setError("");const compressed:File[]=[];for(const file of files){const result=await compressImage(file,1200,500*1024);if(result)compressed.push(result);}const next=[...selectedPhotoFiles,...compressed].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!compressed.length)throw new Error("Nuk u zgjodh asnjë foto e vlefshme.");}catch(err:any){setPhotoError(true);setError(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto. Kompresohen automatikisht në WebP, deri në 500 KB secila.</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
 <button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
@@ -888,7 +894,7 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
       <form className="profile-form" onSubmit={save}>
         <div className="profile-photo-editor">
           <div className="profile-photo-preview">{avatarPreview?<img src={avatarPreview} alt="Foto e profilit" />:<span>{(name||user.email||"P").slice(0,1).toUpperCase()}</span>}</div>
-          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*" onChange={async e=>{const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressImage(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale · kompresohet automatikisht, max 500 KB</small></div>
+          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressImage(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{e.currentTarget.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale · kompresohet automatikisht, max 500 KB</small></div>
         </div>
         <label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
         <label>Qyteti <span className="required-mark">*</span><select value={city} onChange={e=>setCity(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
