@@ -144,10 +144,9 @@ export default function DhurojeHome(){
       ]);
       setProfile(p.data);setDhurapike(Number.isFinite(Number(p.data?.dhurapike))?Number(p.data.dhurapike):10);setListingCity(p.data?.city||"");setLocation(p.data?.city||"Ferizaj");setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
     } else {setProfile(null);setFavorites([]);setClaims([]);}
-    if(u){
-      const {data:rs,error:re}=await supabase.from("dhuroje_requests").select("*").eq("status","open").order("created_at",{ascending:false});
-      if(re)setError(re.message); else setRequests(rs||[]);
-    } else setRequests([]);
+    // Community requests are public; authentication is only required to create or act on one.
+    const {data:rs,error:re}=await supabase.from("dhuroje_requests").select("*").eq("status","open").order("created_at",{ascending:false});
+    if(re)setError(re.message); else setRequests(rs||[]);
     setLoading(false);
   }
 
