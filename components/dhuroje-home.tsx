@@ -221,7 +221,7 @@ export default function DhurojeHome(){
   function requireAuth(){if(!user){setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");return false;}return true;}
   async function auth(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError("");
-    const f=new FormData(e.currentTarget),email=String(f.get("email")),password=String(f.get("password"));
+    const form=e.currentTarget;\n    const f=new FormData(form),email=String(f.get("email")),password=String(f.get("password"));
     const result=authMode==="signup"
       ?await supabase.auth.signUp({email,password})
       :await supabase.auth.signInWithPassword({email,password});
