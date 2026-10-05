@@ -328,14 +328,17 @@ export default function DhurojeHome(){
     const first=files[0];
     const firstExt=first.name.split(".").pop()?.toLowerCase()||"jpg";
     const firstPath=postingUser.id+"/"+item.id+"/0-"+crypto.randomUUID()+"."+firstExt;
+    // Storage is configured for image files; always send an allowed MIME type and
+    // surface the real storage error instead of hiding it behind a generic message.
+    const firstMime=/^(image\\/(webp|jpeg|png))$/i.test(first.type)?first.type.toLowerCase():"image/jpeg";
     const firstUpload=await withTimeout(
-      supabase.storage.from("dhuroje-listings").upload(firstPath,first,{contentType:first.type||"image/jpeg",upsert:false}),
+      supabase.storage.from("dhuroje-listings").upload(firstPath,first,{contentType:firstMime,cacheControl:"31536000",upsert:false}),
       30000,
       "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
     );
     if(firstUpload.error){
       setPhotoError(true);
-      setError("Fotoja e parë nuk u ngarkua. Prit derisa fotoja të jetë gati dhe provo përsëri.");
+      setError("Fotoja e parë nuk u ngarkua: "+(firstUpload.error.message||"gabim i Storage."));
       await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
       return null;
     }
