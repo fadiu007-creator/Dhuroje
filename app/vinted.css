@@ -857,3 +857,12 @@ body{font-size:14px!important}
   max-height:100%!important;
   object-fit:cover!important;
 }
+
+
+.explore-request-card{display:flex;gap:12px;align-items:flex-start}
+.explore-request-photo{width:76px;height:76px;flex:0 0 76px;object-fit:cover;border-radius:10px;background:#f1f3f2}
+.request-photo-picker{margin-top:4px}
+.request-photo-picker .photo-label small{font-weight:500;color:#777}
+.request-photo-picker .photo-thumbnails{display:flex!important;gap:8px!important;margin-top:8px}
+.request-photo-picker .photo-thumbnail{position:relative!important;width:68px!important;height:68px!important;flex:0 0 68px!important;overflow:hidden!important;border-radius:8px!important}
+.request-photo-picker .photo-thumbnail img{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important}
