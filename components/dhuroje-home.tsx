@@ -112,6 +112,20 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms:number, message:string
   }
 }
 
+
+async function uploadDhurojePhoto(path:string,file:File):Promise<{data:any;error:any}>{
+  const mime=/^(image\/(webp|jpeg|png))$/i.test(file.type)?file.type.toLowerCase():"image/jpeg";
+  let lastError:any=null;
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const result=await withTimeout(supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:mime,cacheControl:"31536000",upsert:false}),30000,"Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri.");
+      if(!result.error)return result;
+      lastError=result.error;
+    }catch(err:any){lastError=err;}
+    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,700));
+  }
+  return {data:null,error:lastError||new Error("Ngarkimi i fotos dështoi.")};
+}
 function distanceKm(a:number|null,b:number|null,c:number|null,d:number|null){
   if(a==null||b==null||c==null||d==null)return null;
   const r=Math.PI/180, x=(c-a)*r, y=(d-b)*r;
@@ -336,14 +350,15 @@ export default function DhurojeHome(){
     const first=files[0];
     const firstExt=first.name.split(".").pop()?.toLowerCase()||"jpg";
     const firstPath=postingUser.id+"/"+item.id+"/0-"+crypto.randomUUID()+"."+firstExt;
-    // Storage is configured for image files; always send an allowed MIME type and
-    // surface the real storage error instead of hiding it behind a generic message.
-    const firstMime=/^(image\/(webp|jpeg|png))$/i.test(first.type)?first.type.toLowerCase():"image/jpeg";
-    const firstUpload=await withTimeout(
-      supabase.storage.from("dhuroje-listings").upload(firstPath,first,{contentType:firstMime,cacheControl:"31536000",upsert:false}),
-      30000,
-      "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
-    );
+    // Same resilient uploader used by the working request-photo flow.
+    let firstUpload;
+    try{ firstUpload=await uploadDhurojePhoto(firstPath,first); }
+    catch(err:any){
+      setPhotoError(true);
+      setError("Fotoja e parë nuk u ngarkua: "+(err?.message||"gabim i Storage."));
+      await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});
+      return null;
+    }
     if(firstUpload.error){
       setPhotoError(true);
       setError("Fotoja e parë nuk u ngarkua: "+(firstUpload.error.message||"gabim i Storage."));
@@ -370,11 +385,7 @@ export default function DhurojeHome(){
 
     for(let i=1;i<photoCount;i++){
       const file=files[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg",path=postingUser.id+"/"+item.id+"/"+i+"-"+crypto.randomUUID()+"."+ext;
-      const up=await withTimeout(
-        supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false}),
-        30000,
-        "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
-      );
+      const up=await uploadDhurojePhoto(path,file);
       if(up.error){setError("Një foto nuk u ngarkua. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
       const {error:imageError}=await supabase.from("dhuroje_listing_images").insert({listing_id:item.id,storage_path:path,sort_order:i});
       if(imageError){await supabase.storage.from("dhuroje-listings").remove([path]);setError("Një foto nuk u ruajt. Ju lutem provoje përsëri.");await supabase.rpc("dhuroje_delete_listing",{p_listing_id:item.id});return null;}
@@ -583,9 +594,8 @@ export default function DhurojeHome(){
       if(requestPhoto){
         const ext=requestPhoto.name.split(".").pop()?.toLowerCase()||"jpg";
         const path=currentUser.id+"/requests/"+requestId+"/"+crypto.randomUUID()+"."+ext;
-        const mime=/^(image\/(webp|jpeg|png))$/i.test(requestPhoto.type)?requestPhoto.type.toLowerCase():"image/jpeg";
-        const up=await withTimeout(supabase.storage.from("dhuroje-listings").upload(path,requestPhoto,{contentType:mime,cacheControl:"31536000",upsert:false}),30000,"Ngarkimi i fotos së kërkesës po zgjat shumë. Kontrollo internetin dhe provo përsëri.");
-        if(up.error){
+        const up=await uploadDhurojePhoto(path,requestPhoto);
+      if(up.error){
           await supabase.from("dhuroje_requests").delete().eq("id",requestId);
           setError("Fotoja e kërkesës nuk u ngarkua: "+(up.error.message||"gabim i Storage."));
           return;
