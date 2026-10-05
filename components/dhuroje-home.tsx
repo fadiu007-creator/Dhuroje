@@ -534,6 +534,13 @@ export default function DhurojeHome(){
     e.preventDefault();
     if(requestSaving)return;
     setError("");
+    // Capture the actual form synchronously. React may clear currentTarget after an await.
+    const form=e.currentTarget;
+    if(!(form instanceof HTMLFormElement)){
+      setError("Formulari nuk është më i disponueshëm. Rifresko faqen dhe provo përsëri.");
+      return;
+    }
+    const f=safeFormData(form);
     setRequestSaving(true);
     try{
       const currentUser=await withTimeout(
@@ -542,8 +549,6 @@ export default function DhurojeHome(){
         "Hyrja në llogari po zgjat shumë. Rifresko faqen dhe provo përsëri."
       );
       if(!currentUser)return;
-      const form=e.currentTarget;
-      const f=safeFormData(form);
       const title=String(f.get("title")||"").trim();
       const description=String(f.get("description")||"").trim();
       const category=String(f.get("category")||"other");
