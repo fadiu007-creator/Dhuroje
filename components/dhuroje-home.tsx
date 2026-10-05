@@ -114,15 +114,30 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms:number, message:string
 
 
 async function uploadDhurojePhoto(path:string,file:File):Promise<{data:any;error:any}>{
-  const mime=/^(image\/(webp|jpeg|png))$/i.test(file.type)?file.type.toLowerCase():"image/jpeg";
+  // Use the same upload format as the working request flow: normalize the
+  // file into an actual Blob/File before handing it to Supabase Storage.
+  let uploadFile=file;
+  try{
+    if(file.type!=="image/webp"&&file.type!=="image/jpeg"&&file.type!=="image/png"){
+      const normalized=await compressImage(file,1200,5*1024*1024);
+      if(normalized)uploadFile=normalized;
+    }
+  }catch(err:any){
+    return {data:null,error:err};
+  }
+  const mime=/^(image\/(webp|jpeg|png))$/i.test(uploadFile.type)?uploadFile.type.toLowerCase():"image/jpeg";
   let lastError:any=null;
-  for(let attempt=0;attempt<2;attempt++){
+  for(let attempt=0;attempt<3;attempt++){
     try{
-      const result=await withTimeout(supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:mime,cacheControl:"31536000",upsert:false}),30000,"Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri.");
+      const result=await withTimeout(
+        supabase.storage.from("dhuroje-listings").upload(path,uploadFile,{contentType:mime,cacheControl:"31536000",upsert:false}),
+        30000,
+        "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
+      );
       if(!result.error)return result;
       lastError=result.error;
     }catch(err:any){lastError=err;}
-    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,700));
+    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));
   }
   return {data:null,error:lastError||new Error("Ngarkimi i fotos dështoi.")};
 }
