@@ -1264,7 +1264,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
     </nav>
 
     {section==="overview"&&<section className="account-section">
-      <div className="account-section-head"><div><p className="eyebrow">PERSONALE</p><h2>Informacioni personal</h2><p>Detajet që shfaqen në profilin tënd te Dhuroje.</p></div><button className="secondary" onClick={onProfile}>Ndrysho</button></div>
+      <div className="account-section-head"><div><p className="eyebrow">PERSONALE</p><h2>Të dhënat personale</h2><p>Detajet që shfaqen në profilin tënd te Dhuroje.</p></div><button className="secondary" onClick={onProfile}>Ndrysho</button></div>
       <div className="personal-details">
         <div><span>👤 Emri</span><b>{profile?.display_name||"—"}</b></div>
         <div><span>📞 Telefoni</span><b>{profile?.phone||"—"}</b></div>
