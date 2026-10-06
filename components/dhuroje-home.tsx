@@ -673,7 +673,7 @@ export default function DhurojeHome(){
       <div className="geev-dots"><i></i><i></i></div>
       <div className="geev-mobile-section-head">
         <div><h2>Gjëra pranë teje</h2><p>{location}</p></div>
-        <button onClick={()=>setNearbyOnly(false)}>Shiko të gjitha</button>
+        <button onClick={()=>{setCategory("Të gjitha");setQuery("");setSearchCity("");setConditionFilter("all");setNearbyOnly(false);setFavoritesOnly(false);navigatePage("explore")}}>Shiko të gjitha</button>
       </div>
       <div className="geev-horizontal-list">
         {filtered.slice(0,6).map(item=><article className="geev-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
@@ -684,7 +684,7 @@ export default function DhurojeHome(){
       </div>
       <div className="geev-mobile-section-head selection-head">
         <div><h2>Zgjedhja jonë për ty</h2><p>Gjëra të reja që mund të të pëlqejnë</p></div>
-        <button onClick={()=>{setCategory("Të gjitha");goHome()}}>Shiko të gjitha</button>
+        <button onClick={()=>{setCategory("Të gjitha");setQuery("");setSearchCity("");setConditionFilter("all");setNearbyOnly(false);setFavoritesOnly(false);navigatePage("explore")}}>Shiko të gjitha</button>
       </div>
       <div className="geev-feature-list">
         {filtered.slice(6,12).map(item=><article className="geev-feature-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
@@ -938,7 +938,7 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
       <form className="profile-form" onSubmit={save}>
         <div className="profile-photo-editor">
           <div className="profile-photo-preview">{avatarPreview?<img src={avatarPreview} alt="Foto e profilit" />:<span>{(name||user.email||"P").slice(0,1).toUpperCase()}</span>}</div>
-          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressImage(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale · kompresohet automatikisht, max 500 KB</small></div>
+          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressImage(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale</small></div>
         </div>
         <label>Emri që shfaqet<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
         <label>Qyteti <span className="required-mark">*</span><select value={city} onChange={e=>setCity(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
@@ -1103,7 +1103,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
 
   return <div className="page-content messages-page">
     <div className="messages-topbar">
-      <div><p className="eyebrow">INBOX</p><h1>Mesazhet</h1><p className="messages-subtitle">Bisedat me komunitetin dhe dhuratat që po ndjek.</p></div>
+      <div><p className="eyebrow">INBOX</p><h1>Mesazhet</h1></div>
       <button className="close account-close" onClick={()=>{void supabase.rpc("dhuroje_cleanup_empty_conversations");onClose();}} aria-label="Mbyll">×</button>
     </div>
 
