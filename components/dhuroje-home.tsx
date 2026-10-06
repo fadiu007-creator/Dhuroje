@@ -620,7 +620,7 @@ export default function DhurojeHome(){
 
   return <main className={pageRoute.page==="explore"?"explore-route":""}>
     <header className="topbar"><div className="brand"><span className="brand-mark" aria-hidden="true"><span>D</span><i></i></span><span className="brand-name">Dhuroje</span></div><div className="header-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko"/><button type="button" className="search-filter-trigger" onClick={()=>setShowFilters(x=>!x)} aria-label="Filtrat">⚙️</button></div><nav className="top-nav"><button className="top-nav-active" onClick={()=>{setFavoritesOnly(false);setMapMode(false);navigatePage("explore")}}><span aria-hidden="true">🔎</span> Eksploro</button><button onClick={()=>{if(user){setFavoritesOnly(true);setMapMode(false);navigatePage("saved")}else{setShowAuth(true);setAuthMode("login");navigatePage("auth")}}}><span aria-hidden="true">♡</span> Të ruajturat</button></nav><div className="top-actions">
-      <button className="header-link" onClick={()=>openPosting()}><span aria-hidden="true">🎁</span> Dhuro</button>{user&&<button className="notification-button" aria-label="Njoftimet" onClick={openNotifications}>🔔{notificationCount>0&&<span>{notificationCount>99?"99+":notificationCount}</span>}</button>}<button className="profile-button" aria-label="Profili" onClick={()=>user?openProfile():setShowMenu(!showMenu)}>●</button>
+      <button className="header-link" onClick={()=>openPosting()}><span aria-hidden="true">🎁</span> Dhuro</button>{user&&<button className="notification-button" aria-label="Njoftimet" onClick={openNotifications}>🔔{notificationCount>0&&<span>{notificationCount>99?"99+":notificationCount}</span>}</button>}<button className="profile-button" aria-label="Paneli" onClick={()=>user?navigatePage("dashboard"):setShowMenu(!showMenu)}>●</button>
       {showMenu&&<div className="profile-menu">{user?<><strong>{profile?.display_name||user.email}</strong><button onClick={()=>{setShowMessages(true);navigatePage("messages")}}>💬 Mesazhet</button><button onClick={()=>{if(requireAuth()){setShowDashboard(true);navigatePage("dashboard")}}}>📦 Paneli im</button><button onClick={signOut}>Dil</button></>:<button onClick={()=>{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth")}}>Hyr / Regjistrohu</button>}</div>}
     </div></header>
 
@@ -759,7 +759,7 @@ export default function DhurojeHome(){
     {showAuth&&<div className="page-screen"><div className="page-content"><form className="modal" onSubmit={auth}><div className="modal-head"><div><p className="eyebrow">DHUROJE</p><h2>{postAuth?(authMode==="login"?"Hyr për të dhuruar":"Krijo llogari për të dhuruar"):(pendingPost?"Krijo llogari":"Krijo llogari")}</h2></div><button type="button" className="close" onClick={goHome}>×</button></div>{postAuth&&<p className="form-help">{authMode==="login"?"Hyr me llogarinë tënde dhe pastaj plotëso postimin.":"Krijo llogarinë tënde një herë dhe pastaj plotëso postimin."}</p>}{pendingPost&&<p className="form-help">Postimi yt është ruajtur. Krijo llogarinë dhe do të publikohet menjëherë.</p>}{authMode==="signup"&&<label>Emri<input name="name" required placeholder="Emri yt"/></label>}<label>Email<input name="email" type="email" required/></label><label>Fjalëkalimi<input name="password" type="password" minLength={6} required/></label><button className="primary full" disabled={posting}>{pendingPost?"Krijo llogari & publiko":authMode==="login"?"Hyr":"Krijo llogari"}</button>{!pendingPost&&!postAuth&&<button type="button" className="secondary full" onClick={()=>{const next=authMode==="login"?"signup":"login";setAuthMode(next);const mode=postAuth?"post-"+next:next;navigatePage("auth",undefined,mode)}}>{authMode==="login"?"Krijo llogari":"Kam llogari"}</button>}{postAuth&&<button type="button" className="secondary full" onClick={()=>setAuthMode(authMode==="login"?"signup":"login")}>{authMode==="login"?"Jam i ri · Krijo llogari":"Kam llogari · Hyr"}</button>}</form></div></div>}
     {pageRoute.page==="saved"&&user&&<div className="page-screen"><SavedListings userId={user.id} favorites={favorites} onRemove={(id)=>toggleFavorite(id)} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id);}} onExplore={goHome}/></div>}\n    {showMessages&&<div className="page-screen"><Messages user={user} initialConversationId={messageConversationId} initialError={error} onClose={goHome} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id);}}/></div>}
     {showNotifications&&<div className="page-screen"><Notifications user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
-    {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount} onDashboard={()=>{setShowProfile(false);navigatePage("dashboard")}}/></div>}
+    {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
     {showDashboard&&<div className="page-screen"><Dashboard user={user} profile={profile} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven} onProfile={openProfile} onMessages={()=>{setShowMessages(true);navigatePage("messages")}} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id)}} onSaved={()=>{setFavoritesOnly(true);navigatePage("saved")}} onRequested={()=>navigatePage("dashboard")}/></div>}
     <nav className="bottom-nav" aria-label="Navigimi kryesor">
@@ -773,8 +773,8 @@ export default function DhurojeHome(){
       <button onClick={()=>{if(requireAuth()){setShowMessages(true);navigatePage("messages");}}}>
         <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5.5 4v-4.5A2.5 2.5 0 0 1 2 13V5.5z"/></svg></span><span>Mesazhet</span>
       </button>
-      <button className={showProfile?"nav-active":""} onClick={()=>{if(user){openProfile();}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}>
-        <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg></span><span>Profili</span>
+      <button className={pageRoute.page==="dashboard"?"nav-active":""} onClick={()=>{if(user){navigatePage("dashboard");}else{setShowAuth(true);setAuthMode("login");setPostAuth(false);navigatePage("auth");}}}>
+        <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg></span><span>Paneli</span>
       </button>
     </nav>
   </main>;
@@ -920,7 +920,7 @@ function Notifications({user,onClose,onChanged}:{user:any;onClose:()=>void;onCha
   </div>;
 }
 
-function ProfileModal({user,onClose,onChanged,onDashboard}:{user:any;onClose:()=>void;onChanged:()=>void;onDashboard:()=>void}){
+function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChanged:()=>void}){
   const [profile,setProfile]=useState<any>(null),[reviews,setReviews]=useState<any[]>([]),[stats,setStats]=useState({active:0,given:0}),[name,setName]=useState(""),[city,setCity]=useState(""),[age,setAge]=useState(""),[phone,setPhone]=useState(""),[avatarFile,setAvatarFile]=useState<File|null>(null),[avatarPreview,setAvatarPreview]=useState(""),[saving,setSaving]=useState(false);
   async function load(){
     const [p,r,l]=await Promise.all([
@@ -956,7 +956,7 @@ function ProfileModal({user,onClose,onChanged,onDashboard}:{user:any;onClose:()=
   const avg=reviews.length?reviews.reduce((s,r)=>s+r.rating,0)/reviews.length:0;
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}>
     <div className="modal profile-modal">
-      <div className="modal-head"><div><p className="eyebrow">PROFILI IM</p><h2>{profile?.display_name||"Përdorues"}</h2><div className="profile-meta"><span>📍 {profile?.city||"Qyteti nuk është vendosur"}</span>{profile?.age!=null&&<span>🎂 {profile.age} vjeç</span>}<span>Anëtar që nga {profile?.created_at?new Date(profile.created_at).toLocaleDateString("sq-AL"):new Date(user.created_at).toLocaleDateString("sq-AL")}</span></div></div><div className="modal-head-actions"><button className="secondary" type="button" onClick={onDashboard}>📦 Paneli im</button><button className="close" onClick={onClose}>×</button></div></div>
+      <div className="modal-head"><div><p className="eyebrow">PROFILI IM</p><h2>{profile?.display_name||"Përdorues"}</h2><div className="profile-meta"><span>📍 {profile?.city||"Qyteti nuk është vendosur"}</span>{profile?.age!=null&&<span>🎂 {profile.age} vjeç</span>}<span>Anëtar që nga {profile?.created_at?new Date(profile.created_at).toLocaleDateString("sq-AL"):new Date(user.created_at).toLocaleDateString("sq-AL")}</span></div></div><div className="modal-head-actions"><button className="close" onClick={onClose}>×</button></div></div>
       <form className="profile-form" onSubmit={save}>
         <div className="profile-photo-editor">
           <div className="profile-photo-preview">{avatarPreview?<img src={avatarPreview} alt="Foto e profilit" />:<span>{(name||user.email||"P").slice(0,1).toUpperCase()}</span>}</div>
@@ -1234,8 +1234,8 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
   return <div className="page-content account-page">
     <div className="account-page-top">
       <div>
-        <p className="eyebrow">LLOGARIA IME</p>
-        <h1>Profili im</h1>
+        <p className="eyebrow">PANELI IM</p>
+        <h1>Paneli im</h1>
         <p className="account-email">{user.email}</p>
       </div>
       <button className="close account-close" onClick={onClose} aria-label="Mbyll">×</button>
@@ -1256,7 +1256,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
       <button onClick={()=>goSection("requested")}><b>{requestedCount}</b><span>Të kërkuara</span></button>
     </div>
 
-    <nav className="account-sections" aria-label="Llogaria">
+    <nav className="account-sections" aria-label="Paneli im">
       <button className={section==="overview"?"active":""} onClick={()=>goSection("overview")}>👤 Informacioni personal</button>
       <button onClick={onMessages}>💬 Mesazhet</button>
       <button className={section==="listings"?"active":""} onClick={()=>goSection("listings")}>🎁 Shpalljet e mia <span>{activeMine.length}</span></button>
