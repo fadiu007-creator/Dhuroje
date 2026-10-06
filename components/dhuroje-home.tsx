@@ -145,8 +145,20 @@ export default function DhurojeHome(){
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
   function navigatePage(page:string,id?:string,conversation?:string){
-    // Every navigation starts by closing the currently open overlay/page.
-    // The route effect below then opens only the destination requested by the button.
+    // Navigation is authoritative: update the browser URL first, then let the
+    // route effect open only the destination requested by the clicked button.
+    // This works even when another modal/page is currently covering the screen.
+    const params=new URLSearchParams();
+    if(page!=="home")params.set("page",page);
+    if(id)params.set("id",id);
+    if(conversation)params.set("conversation",conversation);
+    const url=params.toString()?window.location.pathname+"?"+params.toString():window.location.pathname;
+
+    window.history.pushState({page,id,conversation},"",url);
+    setPageRoute({page,id,conversation});
+
+    // Close every previous overlay immediately. The route effect below will
+    // reopen the correct destination on the same render cycle.
     setActiveListing(null);
     setEditingListing(null);
     setPublicProfileId(null);
@@ -162,14 +174,6 @@ export default function DhurojeHome(){
     setShowMenu(false);
     setShowFilters(false);
     setShowDhurapike(false);
-
-    const params=new URLSearchParams();
-    if(page!=="home")params.set("page",page);
-    if(id)params.set("id",id);
-    if(conversation)params.set("conversation",conversation);
-    const url=params.toString()?window.location.pathname+"?"+params.toString():window.location.pathname;
-    window.history.pushState({page,id,conversation}, "", url);
-    setPageRoute({page,id,conversation});
   }
   function goHome(){navigatePage("home");setActiveListing(null);setPublicProfileId(null);setShowMessages(false);setShowDashboard(false);setShowProfile(false);setShowNotifications(false);setShowGive(false);setShowAuth(false);setPostChoice(false);setEditingListing(null);setPostAuth(false);setMessageConversationId("");setFavoritesOnly(false);setNearbyOnly(false);setShowFilters(false);setSearchCity("");}
   useEffect(()=>{
