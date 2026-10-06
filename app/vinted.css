@@ -866,3 +866,9 @@ body{font-size:14px!important}
 .request-photo-picker .photo-thumbnails{display:flex!important;gap:8px!important;margin-top:8px}
 .request-photo-picker .photo-thumbnail{position:relative!important;width:68px!important;height:68px!important;flex:0 0 68px!important;overflow:hidden!important;border-radius:8px!important}
 .request-photo-picker .photo-thumbnail img{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important}
+
+/* Distinguish received and sent messages clearly */
+.messages-workspace .message-row .bubble{background:#eef2f1!important;border-color:#d9e1de!important;color:#252b28!important}
+.messages-workspace .message-row.mine .bubble{background:var(--v-green)!important;border-color:var(--v-green)!important;color:#fff!important}
+.messages-workspace .message-row .bubble small{color:#6f7975!important}
+.messages-workspace .message-row.mine .bubble small{color:#d5eeeb!important}
