@@ -795,7 +795,7 @@ function SavedListings({userId,favorites,onRemove,onListing,onExplore}:{userId:s
     return()=>{cancelled=true};
   },[favorites]);
   return <div className="page-content saved-page">
-    <div className="account-page-top"><div><p className="eyebrow">TË RUAJTURAT</p><h1>Ruajturat</h1><p className="account-email"></p></div><button className="close account-close" onClick={onExplore} aria-label="Mbyll">×</button></div>
+    <div className="account-page-top"><div><p className="eyebrow">Lista e deshirave</p><h1>Lista e deshirave</h1><p className="account-email"></p></div><button className="close account-close" onClick={onExplore} aria-label="Mbyll">×</button></div>
     {loading?<div className="empty">Po ngarkohen të ruajturat…</div>:!rows.length?
       <div className="saved-empty"><div className="messages-empty-icon">♡</div><h2>Nuk ke ruajtur ende asnjë dhuratë</h2><p>Eksploro dhuratat falas dhe ruaj ato që të pëlqejnë.</p><button className="primary" onClick={onExplore}>Eksploro</button></div>:
       <section className="listing-grid">{rows.map(x=><article className="card" key={x.id} onClick={()=>onListing(x)}>
@@ -1260,7 +1260,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
       <button onClick={onMessages}>💬 Mesazhet</button>
       <button className={section==="listings"?"active":""} onClick={()=>goSection("listings")}>🎁 Shpalljet e mia <span>{activeMine.length}</span></button>
       <button onClick={onSaved}>♥ Lista e dëshirave</button>
-      <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Dhuratat e kërkuara <span>{requestedCount}</span></button>
+      <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Kerkesat e mia <span>{requestedCount}</span></button>
     </nav>
 
     {section==="overview"&&<section className="account-section">
@@ -1288,7 +1288,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
     </section>}
 
     {section==="requested"&&<section className="account-section">
-      <div className="account-section-head"><div><p className="eyebrow">KËRKESAT E MIA</p><h2>Dhuratat e kërkuara</h2><p>Këtu i sheh kërkesat që ke dërguar për dhurata.</p></div></div>
+      <div className="account-section-head"><div><p className="eyebrow">KËRKESAT E MIA</p><h2>Kerkesat e mia</h2><p>Këtu i sheh kërkesat që ke dërguar për dhurata.</p></div></div>
       <div className="dash-list">{wanted.length?wanted.map((x:any)=><div className="dash-row account-list-row" key={x.id} onClick={()=>x.listing&&onListing(x.listing)}>
         <span className="dash-icon">{emoji(x.listing?.category||"other")}</span>
         <div><b>{x.listing?.title||"Dhuratë"}</b><small>{x.status==="pending"?"Në pritje":x.status==="accepted"?"Pranuar":x.status} · {x.listing?.location_name||""}</small></div>
