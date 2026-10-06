@@ -145,6 +145,24 @@ export default function DhurojeHome(){
   const [pageRoute,setPageRoute]=useState<{page:string;id?:string;conversation?:string}>({page:"home"});
   const [messageConversationId,setMessageConversationId]=useState("");
   function navigatePage(page:string,id?:string,conversation?:string){
+    // Every navigation starts by closing the currently open overlay/page.
+    // The route effect below then opens only the destination requested by the button.
+    setActiveListing(null);
+    setEditingListing(null);
+    setPublicProfileId(null);
+    setShowMessages(false);
+    setShowDashboard(false);
+    setShowProfile(false);
+    setShowNotifications(false);
+    setShowGive(false);
+    setShowAuth(false);
+    setPostChoice(false);
+    setPostAuth(false);
+    setShowCreateMenu(false);
+    setShowMenu(false);
+    setShowFilters(false);
+    setShowDhurapike(false);
+
     const params=new URLSearchParams();
     if(page!=="home")params.set("page",page);
     if(id)params.set("id",id);
