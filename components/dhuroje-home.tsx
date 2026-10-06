@@ -795,7 +795,7 @@ function SavedListings({userId,favorites,onRemove,onListing,onExplore}:{userId:s
     return()=>{cancelled=true};
   },[favorites]);
   return <div className="page-content saved-page">
-    <div className="account-page-top"><div><p className="eyebrow">TË RUAJTURAT</p><h1>Ruajturat</h1><p className="account-email">Dhuratat që ke ruajtur për t'i parë më vonë.</p></div><button className="close account-close" onClick={onExplore} aria-label="Mbyll">×</button></div>
+    <div className="account-page-top"><div><p className="eyebrow">TË RUAJTURAT</p><h1>Ruajturat</h1><p className="account-email"></p></div><button className="close account-close" onClick={onExplore} aria-label="Mbyll">×</button></div>
     {loading?<div className="empty">Po ngarkohen të ruajturat…</div>:!rows.length?
       <div className="saved-empty"><div className="messages-empty-icon">♡</div><h2>Nuk ke ruajtur ende asnjë dhuratë</h2><p>Eksploro dhuratat falas dhe ruaj ato që të pëlqejnë.</p><button className="primary" onClick={onExplore}>Eksploro</button></div>:
       <section className="listing-grid">{rows.map(x=><article className="card" key={x.id} onClick={()=>onListing(x)}>
@@ -1259,7 +1259,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
       <button className={section==="overview"?"active":""} onClick={()=>goSection("overview")}>👤 Informacioni personal</button>
       <button onClick={onMessages}>💬 Mesazhet</button>
       <button className={section==="listings"?"active":""} onClick={()=>goSection("listings")}>🎁 Shpalljet e mia <span>{activeMine.length}</span></button>
-      <button onClick={onSaved}>♥ Të ruajturat / të pëlqyerat</button>
+      <button onClick={onSaved}>♥ Lista e dëshirave</button>
       <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Dhuratat e kërkuara <span>{requestedCount}</span></button>
     </nav>
 
