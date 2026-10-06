@@ -1247,7 +1247,6 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
         <h2>{profile?.display_name||user.email?.split("@")[0]||"Përdorues"}</h2>
         <p>📍 {profile?.city||"Qyteti nuk është vendosur"}{profile?.age!=null&&<> · 🎂 {profile.age} vjeç</>}</p>
       </div>
-      <button className="secondary" onClick={onProfile}>✏️ Ndrysho profilin</button>
     </div>
 
     <div className="account-stats">
