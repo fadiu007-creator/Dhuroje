@@ -500,7 +500,7 @@ export default function DhurojeHome(){
     setShowMessages(true);
     navigatePage("messages",undefined,conversationId);
   }
-  function openCreateMenu(){setShowCreateMenu(true);setPostChoice(false);setShowGive(false);setShowAuth(false);navigatePage("create");}
+  function openCreateMenu(){setShowCreateMenu(true);setPostChoice(false);setShowGive(false);setShowAuth(false);setShowMenu(false);setShowDhurapike(false);}
   function openRequestCreation(){
     if(!requireAuth())return;
     setRequestPhoto(null);setRequestPhotoPreview("");
