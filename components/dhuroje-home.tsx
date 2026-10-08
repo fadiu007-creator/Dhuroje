@@ -700,7 +700,7 @@ export default function DhurojeHome(){
       <div className="geev-horizontal-list">
         {filtered.slice(0,6).map(item=><article className="geev-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
           <div className="geev-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
-          <div className="geev-card-body"><strong>{item.title}</strong><span>{item.location_name||"Pranë teje"}</span></div>
+          <div className="geev-card-body"><strong>{item.title}</strong></div>
         </article>)}
         {!loading&&filtered.length===0&&<div className="geev-empty-mini">Nuk ka ende gjëra pranë teje.</div>}
       </div>
@@ -711,7 +711,7 @@ export default function DhurojeHome(){
       <div className="geev-feature-list">
         {filtered.slice(6,12).map(item=><article className="geev-feature-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
           <div className="geev-feature-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}</div>
-          <div><strong>{item.title}</strong><small>{categoryLabel[item.category]||item.category} · {item.location_name||"Pranë teje"}</small></div>
+          <div><strong>{item.title}</strong></div>
         </article>)}
       </div>
     </section>
