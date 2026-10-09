@@ -191,17 +191,66 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
     if(objectUrl)URL.revokeObjectURL(objectUrl);
   }
 }
-// Aim for 500 KB, but allow a still-small 700 KB image if a complex photo
-// cannot reach 500 KB after the compressor has reduced quality and dimensions.
-// Never fall back to uploading the untouched, large original file.
+// Alternate browser encoders are used only when our primary decoder fails.
+// They run on the main thread for Android compatibility and never upload the original.
+async function compressWithLibraryFallback(file:File,maxDimension:number,maxBytes:number):Promise<File>{
+  const errors:string[]=[];
+  try{
+    const module=await import("browser-image-compression");
+    const result=await module.default(file,{
+      maxSizeMB:maxBytes/(1024*1024),
+      maxWidthOrHeight:maxDimension,
+      useWebWorker:false,
+      fileType:"image/jpeg",
+      initialQuality:0.82
+    });
+    if(result&&result.size>0&&result.size<=maxBytes){
+      return new File([result],(file.name.replace(/\\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+    }
+    errors.push("browser-image-compression nuk arriti madhësinë e kërkuar");
+  }catch(error:any){errors.push("browser-image-compression: "+String(error?.message||error||"dështoi"));}
+  try{
+    const module=await import("compressorjs");
+    const result=await new Promise<Blob>((resolve,reject)=>{
+      new module.default(file,{
+        quality:0.82,
+        maxWidth:maxDimension,
+        maxHeight:maxDimension,
+        mimeType:"image/jpeg",
+        convertSize:0,
+        success(blob:Blob){resolve(blob);},
+        error(error:Error){reject(error);}
+      });
+    });
+    if(result.size>0&&result.size<=maxBytes){
+      return new File([result],(file.name.replace(/\\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+    }
+    errors.push("compressorjs nuk arriti madhësinë e kërkuar");
+  }catch(error:any){errors.push("compressorjs: "+String(error?.message||error||"dështoi"));}
+  throw new Error(errors.join("; ")||"Nuk u gjet mënyrë alternative për përpunimin e fotos.");
+}
+// Aim for 500 KB, allowing up to 700 KB only when needed. Never upload the
+// untouched original as a fallback. Try independent encoders for difficult Android files.
 async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes=500*1024):Promise<File>{
+  let firstError:any=null;
   try{
     return await compressImage(file,maxDimension,targetBytes);
+  }catch(error:any){firstError=error;}
+  const firstMessage=String(firstError?.message||firstError||"");
+  const sizeLimitFailure=firstMessage.includes("nën")&&firstMessage.includes("KB");
+  if(sizeLimitFailure&&targetBytes<700*1024){
+    try{return await compressImage(file,maxDimension,700*1024);}catch(error:any){firstError=error;}
+  }
+  try{
+    return await compressWithLibraryFallback(file,maxDimension,targetBytes);
   }catch(error:any){
-    const message=String(error?.message||error||"");
-    const sizeLimitFailure=message.includes("nën")&&message.includes("KB");
-    if(!sizeLimitFailure||targetBytes>=700*1024)throw error;
-    return await compressImage(file,maxDimension,700*1024);
+    const alternateError=error;
+    if(targetBytes<700*1024){
+      try{return await compressWithLibraryFallback(file,maxDimension,700*1024);}catch(error700:any){
+        throw new Error("Përpunimi dështoi. Metoda kryesore: "+String(firstError?.message||firstError||"gabim i panjohur")+". Metodat rezervë: "+String(alternateError?.message||alternateError||"gabim i panjohur")+"; "+String(error700?.message||error700||"gabim i panjohur"));
+      }
+    }
+    throw new Error("Përpunimi dështoi. "+String(firstError?.message||firstError||"gabim i panjohur")+"; "+String(alternateError?.message||alternateError||"gabim i panjohur"));
   }
 }
 
@@ -894,7 +943,7 @@ export default function DhurojeHome(){
     {showGive&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card listing-form-card" onSubmit={createListing}><div className="request-form-head"><div><p className="eyebrow">DHUROJE</p><h2>Çfarë dëshiron të dhurosh?</h2><span>Publiko diçka që nuk e përdor më dhe mund t’i nevojitet dikujt.</span></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       {postingCategory!=="Ushqim"&&<label>Gjendja e objektit<select name="condition" defaultValue="good" required><option value="new">Si i ri</option><option value="good">Në gjendje të mirë</option><option value="worn">I përdorur</option><option value="broken">I dëmtuar</option></select></label>}
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input key={photoInputKey} name="photos" type="file" accept="image/*,.heic,.heif" multiple disabled={preparingPhotos||posting||selectedPhotoFiles.length>=6} onClick={e=>{e.currentTarget.value="";}} onChange={async e=>{const input=e.currentTarget;const existing=selectedPhotoFiles;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,Math.max(0,6-existing.length));input.value="";if(!files.length){setPhotoInputKey(k=>k+1);return;}setPhotoError(false);setError("");setPreparingPhotos(true);setUploadStage("Po përgatiten fotot…");const ready:File[]=[];const failed:string[]=[];try{for(let i=0;i<files.length;i++){setUploadStage("Po përpunohet fotoja "+(i+1)+" nga "+files.length+"…");try{const compressed=await withTimeout(compressPhotoWithFallback(files[i],1200,500*1024),75000,"Përgatitja e fotos zgjati shumë.");ready.push(compressed);}catch(_err){failed.push(files[i].name||("Fotoja "+(i+1)));}}const next=[...existing,...ready].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(old=>{old.forEach(url=>URL.revokeObjectURL(url));return next.map(f=>URL.createObjectURL(f));});setUploadStage("");if(failed.length){setPhotoError(true);setError((ready.length?"Disa foto u shtuan, por këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Zgjidhi përsëri ose provo t'i ruash si JPG.");}else{setPhotoError(false);setError("");}}finally{setPreparingPhotos(false);input.value="";setPhotoInputKey(k=>k+1);}}}/></label>{photoError&&<p className="form-inline-error" role="alert">Kjo foto nuk funksionoi. Ju lutem zgjidhni një foto tjetër te “Shto foto”.</p>}{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">{preparingPhotos?"Fotot po kompresohen në telefon para se të ruhen. Mos e mbyll këtë faqe.":"Minimum 1, maksimum 6 foto."}</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input key={photoInputKey} name="photos" type="file" accept="image/*,.heic,.heif" multiple disabled={preparingPhotos||posting||selectedPhotoFiles.length>=6} onClick={e=>{e.currentTarget.value="";}} onChange={async e=>{const input=e.currentTarget;const existing=selectedPhotoFiles;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,Math.max(0,6-existing.length));input.value="";if(!files.length){setPhotoInputKey(k=>k+1);return;}setPhotoError(false);setError("");setPreparingPhotos(true);setUploadStage("Po përgatiten fotot…");const ready:File[]=[];const failed:string[]=[];try{for(let i=0;i<files.length;i++){setUploadStage("Po përpunohet fotoja "+(i+1)+" nga "+files.length+"…");try{const compressed=await withTimeout(compressPhotoWithFallback(files[i],1200,500*1024),75000,"Përgatitja e fotos zgjati shumë.");ready.push(compressed);}catch(photoErr:any){const reason=String(photoErr?.message||photoErr||"gabim i panjohur");failed.push((files[i].name||("Fotoja "+(i+1)))+" ("+reason+")");}}const next=[...existing,...ready].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(old=>{old.forEach(url=>URL.revokeObjectURL(url));return next.map(f=>URL.createObjectURL(f));});setUploadStage("");if(failed.length){setPhotoError(true);setError((ready.length?"Disa foto u shtuan, por këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Zgjidhi përsëri ose provo t'i ruash si JPG.");}else{setPhotoError(false);setError("");}}finally{setPreparingPhotos(false);input.value="";setPhotoInputKey(k=>k+1);}}}/></label>{photoError&&<p className="form-inline-error" role="alert">Kjo foto nuk funksionoi. Ju lutem zgjidhni një foto tjetër te “Shto foto”.</p>}{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">{preparingPhotos?"Fotot po kompresohen në telefon para se të ruhen. Mos e mbyll këtë faqe.":"Minimum 1, maksimum 6 foto."}</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
 {posting&&<div className="photo-upload-progress" role="status" aria-live="polite" style={{margin:"14px 0",padding:"12px",border:"1px solid #dce8df",borderRadius:"12px",background:"#f7fbf8"}}><div style={{display:"flex",justifyContent:"space-between",gap:"12px",marginBottom:"8px",fontSize:"14px",fontWeight:600}}><span>{uploadStage||"Po ngarkohet…"}</span><span>{uploadProgress}%</span></div><div role="progressbar" aria-label="Përparimi i ngarkimit të fotove" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress} style={{height:"8px",width:"100%",background:"#dfe8e1",borderRadius:"999px",overflow:"hidden"}}><div style={{height:"100%",width:uploadProgress+"%",background:"#23864b",borderRadius:"999px",transition:"width 160ms ease"}} /></div><small style={{display:"block",marginTop:"7px",color:"#52645a"}}>Mos e mbyll këtë faqe derisa të përfundojë ngarkimi.</small></div>}<button className="primary full" type="submit" disabled={posting||preparingPhotos||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
