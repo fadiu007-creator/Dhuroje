@@ -64,6 +64,9 @@ async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Prom
             "Telefoni nuk arriti ta hapë foton edhe pas konvertimit."
           );
         }catch(conversionError:any){
+          // Last resort: don't block standard image uploads if this phone cannot decode for compression.
+          const standardImage = ["image/jpeg","image/jpg","image/png","image/webp","image/gif"].includes((file.type||"").toLowerCase()) || /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+          if(standardImage) return file;
           throw new Error("Nuk arrita ta lexoj foton ("+(file.type||"format i panjohur")+", "+Math.round(file.size/1024)+" KB). Provo ta zgjedhësh përsëri nga Galeria ose ruaje si JPG/PNG.");
         }
       }
