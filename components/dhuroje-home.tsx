@@ -53,18 +53,28 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   let bitmap:ImageBitmap|undefined;
   let image:HTMLImageElement|undefined;
   let objectUrl:string|undefined;
+  const timed = async <T,>(promise:PromiseLike<T>,ms:number,message:string):Promise<T> => {
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    try{
+      return await Promise.race([
+        Promise.resolve(promise),
+        new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms);})
+      ]);
+    }finally{if(timer)clearTimeout(timer);}
+  };
   const decode = async (blob:Blob):Promise<{bitmap?:ImageBitmap;image?:HTMLImageElement;url?:string}> => {
     if(typeof createImageBitmap==="function"){
-      try{return {bitmap:await createImageBitmap(blob)};}catch{/* Use image element fallback. */}
+      try{return {bitmap:await timed(createImageBitmap(blob),15000,"Telefoni po vonon duke lexuar foton.")};}catch{/* Try the image element fallback. */}
     }
     const url=URL.createObjectURL(blob);
     try{
-      const img=await new Promise<HTMLImageElement>((resolve,reject)=>{
+      const img=await timed(new Promise<HTMLImageElement>((resolve,reject)=>{
         const el=new Image();
-        el.onload=()=>el.naturalWidth>0&&el.naturalHeight>0?resolve(el):reject(new Error("Përmasat e fotos nuk vlejnë."));
-        el.onerror=()=>reject(new Error("Dekodimi i fotos dështoi."));
+        const timeout=setTimeout(()=>reject(new Error("Telefoni nuk arriti ta lexojë foton brenda 15 sekondave.")),15000);
+        el.onload=()=>{clearTimeout(timeout);el.naturalWidth>0&&el.naturalHeight>0?resolve(el):reject(new Error("Përmasat e fotos nuk vlejnë."));};
+        el.onerror=()=>{clearTimeout(timeout);reject(new Error("Dekodimi i fotos dështoi."));};
         el.src=url;
-      });
+      }),16000,"Leximi i fotos zgjati shumë.");
       return {image:img,url};
     }catch(error){URL.revokeObjectURL(url);throw error;}
   };
@@ -99,7 +109,8 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       if(!ctx){reject(new Error("Telefoni nuk mundi ta përgatisë foton."));return;}
       ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
       try{ctx.drawImage(drawable,0,0,w,h);}catch{reject(new Error("Nuk arrita ta përgatis foton."));return;}
-      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Kompresimi i fotos dështoi.")),"image/jpeg",quality);
+      const timer=setTimeout(()=>reject(new Error("Kompresimi i fotos zgjati shumë në telefon. Provo një foto më të vogël.")),12000);
+      canvas.toBlob(blob=>{clearTimeout(timer);blob?resolve(blob):reject(new Error("Kompresimi i fotos dështoi."));},"image/jpeg",quality);
     });
     let blob=await encode(width,height,0.82);
     for(const quality of [0.72,0.62,0.52]){
