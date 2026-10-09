@@ -77,8 +77,18 @@ async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Prom
       }
       if(!blob||blob.size>maxBytes)throw new Error("size");
       return new File([blob],"photo.jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }catch{
-      throw new Error("Nuk mund të lexohet ky format fotografie në këtë shfletues. Provo ta zgjedhësh foton përmes Galerisë së telefonit.");
+    }catch(bitmapError:any){
+      // Last fallback: some phones expose HEIC/HEIF photos with a generic MIME type.
+      try{
+        const mod=await import("heic2any");
+        const convert=(mod as any).default||mod;
+        const converted=await convert({blob:file,toType:"image/jpeg",quality:.9});
+        source=Array.isArray(converted)?converted[0]:converted;
+        image=await loadImage(source,60000);
+      }catch(conversionError:any){
+        const format=file.type||"format i panjohur";
+        throw new Error("Nuk arrita ta përpunoj foton e zgjedhur ("+format+", "+Math.round(file.size/1024)+" KB). Provo një foto tjetër ose ruaje si JPG/PNG. "+(conversionError?.message||bitmapError?.message||"Formati nuk mbështetet."));
+      }
     }
   }
   let blob:Blob|null=null;
