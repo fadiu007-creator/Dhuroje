@@ -59,40 +59,38 @@ async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promi
     }),10000,"Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël.");
   }catch{
     if(objectUrl)URL.revokeObjectURL(objectUrl);
-    // Some Android gallery/browser combinations expose a valid image file
-    // that the browser decoder cannot render. Do not block publishing it.
-    if(source.size<=15*1024*1024){
-      const type=source.type||file.type||"image/jpeg";
-      const ext=type==="image/png"?"png":type==="image/webp"?"webp":type==="image/jpeg"?"jpg":"jpg";
-      return new File([source],"photo."+ext,{type,lastModified:Date.now()});
-    }
-    throw new Error("Ky format fotografie nuk mbështetet nga shfletuesi. Provo JPG ose PNG.");
+    // Never upload the original as a fallback: large originals can exceed the
+    // Storage bucket limit and bypass the compression requirement.
+    throw new Error("Fotoja nuk mund të përpunohej në këtë format. Provo JPG ose PNG, ose bëj një pamje ekrani të fotos.");
   }finally{
     if(objectUrl)URL.revokeObjectURL(objectUrl);
   }
 
-  const scale=Math.min(1,maxDimension/Math.max(image.naturalWidth,image.naturalHeight));
-  const width=Math.max(1,Math.round(image.naturalWidth*scale));
-  const height=Math.max(1,Math.round(image.naturalHeight*scale));
-  const canvas=document.createElement("canvas");
-  canvas.width=width;canvas.height=height;
-  const ctx=canvas.getContext("2d");
-  if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
-  ctx.drawImage(image,0,0,width,height);
-
-  const makeBlob=(type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
+  const makeBlob=(canvas:HTMLCanvasElement,type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
   let blob:Blob|null=null;
-  for(const quality of [.82,.74,.66,.58,.50,.42]){
-    blob=await makeBlob("image/webp",quality);
-    if(blob&&blob.size<=maxBytes)break;
-  }
-  if(!blob||blob.size>maxBytes){
-    for(const quality of [.75,.65,.55]){
-      blob=await makeBlob("image/jpeg",quality);
+  // Retry at progressively smaller dimensions so high-resolution phone photos
+  // reliably fit the storage target instead of failing after one pass.
+  for(const dimension of [maxDimension,1000,800,640]){
+    const scale=Math.min(1,dimension/Math.max(image.naturalWidth,image.naturalHeight));
+    const canvas=document.createElement("canvas");
+    canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
+    canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+    const ctx=canvas.getContext("2d");
+    if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
+    ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    for(const quality of [.82,.72,.62,.52,.42,.32]){
+      blob=await makeBlob(canvas,"image/webp",quality);
       if(blob&&blob.size<=maxBytes)break;
     }
+    if(!blob||blob.size>maxBytes){
+      for(const quality of [.70,.55,.40]){
+        blob=await makeBlob(canvas,"image/jpeg",quality);
+        if(blob&&blob.size<=maxBytes)break;
+      }
+    }
+    if(blob&&blob.size<=maxBytes)break;
   }
-  if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej nën 500 KB.");
+  if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej nën 500 KB. Provo një foto tjetër.");
   const type=blob.type||"image/webp";
   const ext=type==="image/jpeg"?"jpg":"webp";
   return new File([blob],"photo."+ext,{type,lastModified:Date.now()});
