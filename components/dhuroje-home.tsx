@@ -30,108 +30,37 @@ function safeFormData(form: HTMLFormElement): FormData{
 
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
 
-async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Promise<File|null>{
-  if(!file || file.size===0)throw new Error("Skedari i fotos është bosh.");
+async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Promise<File>{
+  if(!file||file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
-  const isHeic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
-  const supported=/^image\/(jpeg|jpg|png|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(file.type)||/\.(jpe?g|png|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(file.name);
-  if(!supported && file.type && !file.type.startsWith("image/"))throw new Error("Zgjidh një skedar fotografie nga Galeria.");
 
-  let source:Blob=file;
-  let sourceName=file.name||"foto";
+  let source:File|Blob=file;
+  const isHeic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
   if(isHeic){
     try{
-      const mod=await import("heic2any");
-      const converted=await mod.default({blob:file,toType:"image/jpeg",quality:0.85});
+      const heic=await import("heic2any");
+      const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
       source=Array.isArray(converted)?converted[0]:converted;
-      sourceName=sourceName.replace(/\.(heic|heif|heics|heifs)$/i,"")+".jpg";
     }catch{
-      throw new Error("Kjo foto është HEIC dhe nuk u konvertua. Provo ta zgjedhësh përsëri nga Galeria.");
+      throw new Error("Telefoni nuk mundi ta konvertojë këtë foto HEIC. Në Galeri ruaje si JPG dhe provo përsëri.");
     }
   }
-
-  let bitmap:ImageBitmap|undefined;
-  let image:HTMLImageElement|undefined;
-  let objectUrl:string|undefined;
-  const timed = async <T,>(promise:PromiseLike<T>,ms:number,message:string):Promise<T> => {
-    let timer:ReturnType<typeof setTimeout>|undefined;
-    try{
-      return await Promise.race([
-        Promise.resolve(promise),
-        new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms);})
-      ]);
-    }finally{if(timer)clearTimeout(timer);}
-  };
-  const decode = async (blob:Blob):Promise<{bitmap?:ImageBitmap;image?:HTMLImageElement;url?:string}> => {
-    if(typeof createImageBitmap==="function"){
-      try{return {bitmap:await timed(createImageBitmap(blob),15000,"Telefoni po vonon duke lexuar foton.")};}catch{/* Try the image element fallback. */}
-    }
-    const url=URL.createObjectURL(blob);
-    try{
-      const img=await timed(new Promise<HTMLImageElement>((resolve,reject)=>{
-        const el=new Image();
-        const timeout=setTimeout(()=>reject(new Error("Telefoni nuk arriti ta lexojë foton brenda 15 sekondave.")),15000);
-        el.onload=()=>{clearTimeout(timeout);el.naturalWidth>0&&el.naturalHeight>0?resolve(el):reject(new Error("Përmasat e fotos nuk vlejnë."));};
-        el.onerror=()=>{clearTimeout(timeout);reject(new Error("Dekodimi i fotos dështoi."));};
-        el.src=url;
-      }),16000,"Leximi i fotos zgjati shumë.");
-      return {image:img,url};
-    }catch(error){URL.revokeObjectURL(url);throw error;}
-  };
   try{
-    try{
-      const decoded=await decode(source);
-      bitmap=decoded.bitmap;image=decoded.image;objectUrl=decoded.url;
-    }catch(firstError){
-      // Some Android gallery providers label HEIC/HEIF photos as JPEG or omit the extension.
-      // Try conversion once even when the filename/MIME type did not identify HEIC.
-      try{
-        const mod=await import("heic2any");
-        const converted=await mod.default({blob:source,toType:"image/jpeg",quality:0.85});
-        source=Array.isArray(converted)?converted[0]:converted;
-        sourceName=sourceName.replace(/\.[^.]+$/,"")+".jpg";
-        const decoded=await decode(source);
-        bitmap=decoded.bitmap;image=decoded.image;objectUrl=decoded.url;
-      }catch{
-        throw new Error("Nuk arrita ta hap këtë format fotografie në telefon. Në Galeri zgjidh Ndaj ose Ruaj si dhe provo JPG.");
-      }
-    }
-    const drawable:CanvasImageSource=(bitmap||image)!;
-    const originalWidth=bitmap?.width||image!.naturalWidth;
-    const originalHeight=bitmap?.height||image!.naturalHeight;
-    const scale=Math.min(1,maxDimension/Math.max(originalWidth,originalHeight));
-    let width=Math.max(1,Math.round(originalWidth*scale));
-    let height=Math.max(1,Math.round(originalHeight*scale));
-    const canvas=document.createElement("canvas");
-    const encode=async(w:number,h:number,quality:number)=>new Promise<Blob>((resolve,reject)=>{
-      canvas.width=w;canvas.height=h;
-      const ctx=canvas.getContext("2d");
-      if(!ctx){reject(new Error("Telefoni nuk mundi ta përgatisë foton."));return;}
-      ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
-      try{ctx.drawImage(drawable,0,0,w,h);}catch{reject(new Error("Nuk arrita ta përgatis foton."));return;}
-      const timer=setTimeout(()=>reject(new Error("Kompresimi i fotos zgjati shumë në telefon. Provo një foto më të vogël.")),12000);
-      canvas.toBlob(blob=>{clearTimeout(timer);blob?resolve(blob):reject(new Error("Kompresimi i fotos dështoi."));},"image/jpeg",quality);
+    const compressor=(await import("browser-image-compression")).default;
+    const result=await compressor(source as File,{
+      maxSizeMB:maxBytes/(1024*1024),
+      maxWidthOrHeight:maxDimension,
+      useWebWorker:false,
+      fileType:"image/jpeg",
+      initialQuality:0.82,
+      alwaysKeepResolution:false
     });
-    let blob=await encode(width,height,0.82);
-    for(const quality of [0.72,0.62,0.52]){
-      if(blob.size<=maxBytes)break;
-      blob=await encode(width,height,quality);
-    }
-    let attempts=0;
-    while(blob.size>maxBytes&&attempts<6){
-      width=Math.max(240,Math.round(width*0.7));
-      height=Math.max(240,Math.round(height*0.7));
-      blob=await encode(width,height,0.5);
-      attempts++;
-    }
-    if(blob.size>maxBytes)throw new Error("Fotoja nuk u zvogëlua mjaftueshëm. Zgjidh një foto tjetër.");
-    const base=(sourceName.replace(/\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
-    return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+    if(!result||result.size===0)throw new Error("Biblioteka nuk prodhoi një foto të vlefshme.");
+    if(result.size>maxBytes)throw new Error("Fotoja është ende shumë e madhe. Zgjidh një foto më të vogël.");
+    return new File([result],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
   }catch(error){
-    throw new Error(error instanceof Error?error.message:"Nuk arrita ta përgatis foton. Provo një foto tjetër.");
-  }finally{
-    bitmap?.close();
-    if(objectUrl)URL.revokeObjectURL(objectUrl);
+    if(error instanceof Error&&error.message.startsWith("Fotoja "))throw error;
+    throw new Error("Nuk arrita ta kompresoj foton. Provo JPG ose zgjidh një foto tjetër.");
   }
 }
 const supabase=createClient();
@@ -154,28 +83,14 @@ async function uploadDhurojePhoto(path:string,file:File,onProgress?:(loaded:numb
   try{
     const {data:{session},error:sessionError}=await supabase.auth.getSession();
     if(sessionError||!session?.access_token)throw new Error("Sesioni përfundoi. Hyr përsëri dhe provo.");
-    const storageUrl=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://saavqlbwffrwxingbnri.supabase.co";
-    const publishableKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_IruAYNoelmN7N4Q1Hy2HFg_wxw-1zgS";
-    const encodedPath=path.split("/").map(encodeURIComponent).join("/");
-    return await new Promise((resolve)=>{
-      const xhr=new XMLHttpRequest();
-      xhr.open("POST",storageUrl+"/storage/v1/object/dhuroje-listings/"+encodedPath);
-      xhr.setRequestHeader("apikey",publishableKey);
-      xhr.setRequestHeader("Authorization","Bearer "+session.access_token);
-      xhr.setRequestHeader("Content-Type",file.type||"image/jpeg");
-      xhr.setRequestHeader("x-upsert","false");
-      xhr.upload.onprogress=(event)=>{if(event.lengthComputable)onProgress?.(event.loaded,event.total);};
-      xhr.onload=()=>{
-        let body:any={};
-        try{body=JSON.parse(xhr.responseText||"{}");}catch{}
-        if(xhr.status>=200&&xhr.status<300)resolve({data:body,error:null});
-        else resolve({data:null,error:{message:body.message||body.error||("Storage HTTP "+xhr.status)}});
-      };
-      xhr.onerror=()=>resolve({data:null,error:{message:"Lidhja u ndërpre gjatë ngarkimit (Failed to fetch)."}});
-      xhr.ontimeout=()=>resolve({data:null,error:{message:"Ngarkimi i fotos dështoi pas 3 minutash. Kontrollo lidhjen dhe provo përsëri."}});
-      xhr.timeout=180000;
-      xhr.send(file);
+    const {data,error}=await supabase.storage.from("dhuroje-listings").upload(path,file,{
+      contentType:"image/jpeg",
+      upsert:false,
+      cacheControl:"3600"
     });
+    if(error)return {data:null,error};
+    onProgress?.(file.size,file.size);
+    return {data,error:null};
   }catch(error:any){
     return {data:null,error};
   }
@@ -426,8 +341,7 @@ export default function DhurojeHome(){
         );
         if(!compressed)throw new Error("Fotoja "+(i+1)+" nuk mund të përpunohej.");
         setUploadProgress(Math.max(8,Math.round(((i+0.05)/totalFiles)*90)));
-        const ext=compressed.type==="image/webp"?"webp":compressed.type==="image/png"?"png":compressed.type==="image/gif"?"gif":compressed.type==="image/avif"?"avif":"jpg";
-        const path=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
+        const path=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+".jpg";
         setUploadStage("Po ngarkohet fotoja "+(i+1)+" nga "+totalFiles+"…");
         const up=await uploadDhurojePhoto(path,compressed,(loaded,total)=>{
           const fraction=total>0?Math.min(1,loaded/total):0;
@@ -668,8 +582,7 @@ export default function DhurojeHome(){
         return;
       }
       if(requestPhoto){
-        const ext=requestPhoto.name.split(".").pop()?.toLowerCase()||"jpg";
-        const path=currentUser.id+"/requests/"+requestId+"/"+crypto.randomUUID()+"."+ext;
+        const path=currentUser.id+"/requests/"+requestId+"/"+crypto.randomUUID()+".jpg";
         const up=await uploadDhurojePhoto(path,requestPhoto);
       if(up.error){
           await supabase.from("dhuroje_requests").delete().eq("id",requestId);
@@ -951,10 +864,10 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     }
     const remaining=photos.filter(x=>!removePhotoIds.includes(x.id));
     for(let i=0;i<Math.min(newFiles.length,6);i++){
-      const file=newFiles[i],ext=file.name.split(".").pop()?.toLowerCase()||"jpg";
-      const path=listing.owner_id+"/"+listing.id+"/"+(remaining.length+i)+"-"+crypto.randomUUID()+"."+ext;
-      const up=await supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type||"image/jpeg",upsert:false});
-      if(up.error){setError(up.error.message);setSaving(false);return;}
+      const file=await compressImage(newFiles[i],1200,500*1024);
+      const path=listing.owner_id+"/"+listing.id+"/"+(remaining.length+i)+"-"+crypto.randomUUID()+".jpg";
+      const up=await uploadDhurojePhoto(path,file);
+      if(up.error){setError(up.error.message||"Fotoja nuk u ngarkua.");setSaving(false);return;}
       const ins=await supabase.from("dhuroje_listing_images").insert({listing_id:listing.id,storage_path:path,sort_order:remaining.length+i});
       if(ins.error){setError(ins.error.message);setSaving(false);return;}
     }
@@ -1024,8 +937,8 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
     if(avatarFile){
       if(!avatarFile.type.startsWith("image/")){alert("Zgjidh një foto.");setSaving(false);return;}
       if(avatarFile.size>500*1024){alert("Fotoja e kompresuar duhet të jetë maksimumi 500 KB.");setSaving(false);return;}
-      const path=user.id+"/"+crypto.randomUUID()+".webp";
-      const up=await supabase.storage.from("dhuroje-avatars").upload(path,avatarFile,{contentType:"image/webp",upsert:false});
+      const path=user.id+"/"+crypto.randomUUID()+".jpg";
+      const up=await supabase.storage.from("dhuroje-avatars").upload(path,avatarFile,{contentType:"image/jpeg",upsert:false});
       if(up.error){alert(up.error.message);setSaving(false);return;}
       avatar_url=supabase.storage.from("dhuroje-avatars").getPublicUrl(path).data.publicUrl;
     }
