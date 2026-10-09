@@ -120,13 +120,32 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms:number, message:string
 }
 
 
-async function uploadDhurojePhoto(path:string,file:File):Promise<{data:any;error:any}>{
+async function uploadDhurojePhoto(path:string,file:File,onProgress?:(loaded:number,total:number)=>void):Promise<{data:any;error:any}>{
   try{
-    return await withTimeout(
-      supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type,upsert:false}),
-      180000,
-      "Ngarkimi i fotos dështoi pas 3 minutash. Kontrollo lidhjen dhe provo përsëri."
-    );
+    const {data:{session},error:sessionError}=await supabase.auth.getSession();
+    if(sessionError||!session?.access_token)throw new Error("Sesioni përfundoi. Hyr përsëri dhe provo.");
+    const storageUrl=process.env.NEXT_PUBLIC_SUPABASE_URL||"https://saavqlbwffrwxingbnri.supabase.co";
+    const publishableKey=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_IruAYNoelmN7N4Q1Hy2HFg_wxw-1zgS";
+    const encodedPath=path.split("/").map(encodeURIComponent).join("/");
+    return await new Promise((resolve)=>{
+      const xhr=new XMLHttpRequest();
+      xhr.open("POST",storageUrl+"/storage/v1/object/dhuroje-listings/"+encodedPath);
+      xhr.setRequestHeader("apikey",publishableKey);
+      xhr.setRequestHeader("Authorization","Bearer "+session.access_token);
+      xhr.setRequestHeader("Content-Type",file.type||"image/jpeg");
+      xhr.setRequestHeader("x-upsert","false");
+      xhr.upload.onprogress=(event)=>{if(event.lengthComputable)onProgress?.(event.loaded,event.total);};
+      xhr.onload=()=>{
+        let body:any={};
+        try{body=JSON.parse(xhr.responseText||"{}");}catch{}
+        if(xhr.status>=200&&xhr.status<300)resolve({data:body,error:null});
+        else resolve({data:null,error:{message:body.message||body.error||("Storage HTTP "+xhr.status)}});
+      };
+      xhr.onerror=()=>resolve({data:null,error:{message:"Lidhja u ndërpre gjatë ngarkimit (Failed to fetch)."}});
+      xhr.ontimeout=()=>resolve({data:null,error:{message:"Ngarkimi i fotos dështoi pas 3 minutash. Kontrollo lidhjen dhe provo përsëri."}});
+      xhr.timeout=180000;
+      xhr.send(file);
+    });
   }catch(error:any){
     return {data:null,error};
   }
@@ -143,7 +162,7 @@ export default function DhurojeHome(){
   const [category,setCategory]=useState<Category>("Të gjitha"),[query,setQuery]=useState("");
   const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[dhurapike,setDhurapike]=useState(10),[showDhurapike,setShowDhurapike]=useState(false),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
   const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showCreateMenu,setShowCreateMenu]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
-  const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false);
+  const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false),[uploadProgress,setUploadProgress]=useState(0),[uploadStage,setUploadStage]=useState("");
   const [photoError,setPhotoError]=useState(false),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
   const [authMode,setAuthMode]=useState<"login"|"signup">("login"),[loading,setLoading]=useState(true),[location,setLocation]=useState("Ferizaj");
   const [coords,setCoords]=useState<{lat:number;lon:number}|null>(null),[mapMode,setMapMode]=useState(false),[nearbyOnly,setNearbyOnly]=useState(false),[favoritesOnly,setFavoritesOnly]=useState(false),[sortMode,setSortMode]=useState<"new"|"near">("new");
@@ -364,16 +383,26 @@ export default function DhurojeHome(){
     try{
       // Nothing happens while selecting photos. On publish, each photo is compressed
       // in the background, uploaded, and only then referenced by the database.
-      for(let i=0;i<Math.min(files.length,6);i++){
+      const totalFiles=Math.min(files.length,6);
+      for(let i=0;i<totalFiles;i++){
+        setUploadStage("Po përgatitet fotoja "+(i+1)+" nga "+totalFiles+"…");
+        setUploadProgress(Math.round((i/totalFiles)*90));
         const compressed=await compressImage(files[i],1200,500*1024);
         if(!compressed)throw new Error("Fotoja "+(i+1)+" nuk mund të përpunohej.");
         const ext=compressed.type==="image/webp"?"webp":"jpg";
         const path=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
-        const up=await uploadDhurojePhoto(path,compressed);
+        setUploadStage("Po ngarkohet fotoja "+(i+1)+" nga "+totalFiles+"…");
+        const up=await uploadDhurojePhoto(path,compressed,(loaded,total)=>{
+          const fraction=total>0?Math.min(1,loaded/total):0;
+          setUploadProgress(Math.min(90,Math.round(((i+fraction)/totalFiles)*90)));
+        });
         if(up.error)throw new Error("Fotoja "+(i+1)+" nuk u ngarkua: "+(up.error.message||"Failed to fetch"));
         uploadedPaths.push(path);
+        setUploadProgress(Math.round(((i+1)/totalFiles)*90));
       }
 
+      setUploadProgress(95);
+      setUploadStage("Po ruhet shpallja…");
       const {error:e1}=await withTimeout(
         supabase.from("dhuroje_listings").insert(listingRow),
         15000,
@@ -387,6 +416,8 @@ export default function DhurojeHome(){
         });
         if(imageError)throw imageError;
       }
+      setUploadProgress(100);
+      setUploadStage("Përfundoi!");
       return listingRow as Listing;
     }catch(err:any){
       if(uploadedPaths.length)await supabase.storage.from("dhuroje-listings").remove(uploadedPaths);
@@ -414,6 +445,8 @@ export default function DhurojeHome(){
       return;
     }
     setPosting(true);
+    setUploadProgress(0);
+    setUploadStage("Po përgatitet ngarkimi…");
     try{
       const created=await finishListing(user,f,selectedPhotos);
       if(created){
@@ -427,6 +460,8 @@ export default function DhurojeHome(){
       setError(err?.message||"Nuk u publikua shpallja. Provo përsëri.");
     }finally{
       setPosting(false);
+      setUploadStage("");
+      setUploadProgress(0);
     }
   }
   async function deleteListing(listing:Listing){
@@ -746,7 +781,7 @@ export default function DhurojeHome(){
       <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*,.heic,.heif" multiple onChange={e=>{const input=e.currentTarget;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){setPhotoError(false);setError("");const next=[...selectedPhotoFiles,...files].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));}input.value="";}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto.</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
-<button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
+{posting&&<div className="photo-upload-progress" role="status" aria-live="polite" style={{margin:"14px 0",padding:"12px",border:"1px solid #dce8df",borderRadius:"12px",background:"#f7fbf8"}}><div style={{display:"flex",justifyContent:"space-between",gap:"12px",marginBottom:"8px",fontSize:"14px",fontWeight:600}}><span>{uploadStage||"Po ngarkohet…"}</span><span>{uploadProgress}%</span></div><div role="progressbar" aria-label="Përparimi i ngarkimit të fotove" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress} style={{height:"8px",width:"100%",background:"#dfe8e1",borderRadius:"999px",overflow:"hidden"}}><div style={{height:"100%",width:uploadProgress+"%",background:"#23864b",borderRadius:"999px",transition:"width 160ms ease"}} /></div><small style={{display:"block",marginTop:"7px",color:"#52645a"}}>Mos e mbyll këtë faqe derisa të përfundojë ngarkimi.</small></div>}<button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
     </form></div></div>}
 
     {showRequestForm&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card" onSubmit={createRequest}>
