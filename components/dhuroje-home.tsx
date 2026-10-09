@@ -85,7 +85,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
     }
     if(snapshot){
       const mime=detectedMime||file.type||"application/octet-stream";
-      source=new Blob([snapshot],{type:mime});
+      source=new Blob([snapshot.buffer.slice(snapshot.byteOffset,snapshot.byteOffset+snapshot.byteLength) as ArrayBuffer],{type:mime});
     }
   }catch(_snapshotError){}
 
