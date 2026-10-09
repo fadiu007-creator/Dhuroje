@@ -33,53 +33,81 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Promise<File|null>{
   if(!file || file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
-  const heic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
-  const supported=/^image\/(jpeg|jpg|png|webp|gif|avif)$/i.test(file.type)||/\.(jpe?g|png|webp|gif|avif)$/i.test(file.name);
-  if(heic)throw new Error("Ky telefon jep foton në format HEIC. Zgjidhe si JPG nga Galeria që të mund të ngarkohet.");
-  if(!supported)throw new Error("Zgjidh një foto JPG, PNG, WebP ose GIF.");
+  const isHeic=/\\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  const supported=/^image\\/(jpeg|jpg|png|webp|gif|avif|heic|heif)$/i.test(file.type)||/\\.(jpe?g|png|webp|gif|avif|heic|heif)$/i.test(file.name);
+  if(!supported)throw new Error("Zgjidh një foto JPG, PNG, WebP, GIF ose HEIC.");
 
-  // Resize in-browser using the broadly supported HTMLImageElement path
-  // rather than createImageBitmap, which can fail on some Android browsers.
-  const objectUrl=URL.createObjectURL(file);
+  let source:Blob=file;
+  let sourceName=file.name||"foto";
+  // Convert HEIC explicitly; Android/iOS browsers often cannot decode it natively.
+  if(isHeic){
+    try{
+      const mod=await import("heic2any");
+      const converted=await mod.default({blob:file,toType:"image/jpeg",quality:0.85});
+      source=Array.isArray(converted)?converted[0]:converted;
+      sourceName=sourceName.replace(/\\.(heic|heif|heics|heifs)$/i,"")+".jpg";
+    }catch{
+      throw new Error("Kjo foto është HEIC dhe telefoni nuk arriti ta konvertojë. Hape foton në Galeri dhe ruaje/eksportoje si JPG.");
+    }
+  }
+
+  const readAsDataUrl=(blob:Blob)=>new Promise<string>((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Leximi i fotos dështoi."));
+    reader.onerror=()=>reject(new Error("Leximi i fotos dështoi."));
+    reader.readAsDataURL(blob);
+  });
+  const loadImage=(src:string)=>new Promise<HTMLImageElement>((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>img.naturalWidth&&img.naturalHeight?resolve(img):reject(new Error("Përmasat e fotos nuk vlejnë."));
+    img.onerror=()=>reject(new Error("Shfletuesi nuk arriti ta dekodojë foton."));
+    img.src=src;
+  });
+
+  let image:HTMLImageElement;
+  let objectUrl:string|undefined;
   try{
-    const image=await new Promise<HTMLImageElement>((resolve,reject)=>{
-      const img=new Image();
-      img.onload=()=>resolve(img);
-      img.onerror=()=>reject(new Error("Nuk arrita ta lexoj foton. Provo ta zgjedhësh përsëri nga Galeria ose ruaje si JPG/PNG."));
-      img.src=objectUrl;
-    });
-    if(!image.naturalWidth||!image.naturalHeight)throw new Error("Fotoja nuk ka përmasa të vlefshme. Provo një foto tjetër.");
+    try{
+      objectUrl=URL.createObjectURL(source);
+      image=await loadImage(objectUrl);
+    }catch{
+      // Some Android gallery providers produce blob URLs the browser fails to decode.
+      if(objectUrl){URL.revokeObjectURL(objectUrl);objectUrl=undefined;}
+      image=await loadImage(await readAsDataUrl(source));
+    }
     const scale=Math.min(1,maxDimension/Math.max(image.naturalWidth,image.naturalHeight));
+    let width=Math.max(1,Math.round(image.naturalWidth*scale));
+    let height=Math.max(1,Math.round(image.naturalHeight*scale));
     const canvas=document.createElement("canvas");
-    canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
-    canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
     const context=canvas.getContext("2d");
     if(!context)throw new Error("Telefoni nuk mundi ta përgatisë foton. Provo një foto JPG.");
-    context.fillStyle="#ffffff";
-    context.fillRect(0,0,canvas.width,canvas.height);
-    context.drawImage(image,0,0,canvas.width,canvas.height);
-    const toBlob=(quality:number)=>new Promise<Blob>((resolve,reject)=>{
-      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Nuk arrita ta zvogëloj foton. Provo një foto tjetër.")),"image/jpeg",quality);
+    const encode=async(w:number,h:number,quality:number)=>new Promise<Blob>((resolve,reject)=>{
+      canvas.width=w;canvas.height=h;
+      const ctx=canvas.getContext("2d");
+      if(!ctx){reject(new Error("Përgatitja e fotos dështoi."));return;}
+      ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.drawImage(image,0,0,w,h);
+      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Kompresimi i fotos dështoi.")),"image/jpeg",quality);
     });
-    let blob=await toBlob(0.82);
+    let blob=await encode(width,height,0.82);
     for(const quality of [0.72,0.62,0.52]){
       if(blob.size<=maxBytes)break;
-      blob=await toBlob(quality);
+      blob=await encode(width,height,quality);
     }
-    // Keep shrinking dimensions as a last resort so files fit the storage cap.
     let attempts=0;
-    while(blob.size>maxBytes&&attempts<3){
-      canvas.width=Math.max(480,Math.round(canvas.width*0.8));
-      canvas.height=Math.max(480,Math.round(canvas.height*0.8));
-      context.drawImage(image,0,0,canvas.width,canvas.height);
-      blob=await toBlob(0.55);
+    while(blob.size>maxBytes&&attempts<5){
+      width=Math.max(320,Math.round(width*0.75));
+      height=Math.max(320,Math.round(height*0.75));
+      blob=await encode(width,height,0.55);
       attempts++;
     }
-    if(blob.size>maxBytes)throw new Error("Fotoja nuk u zvogëlua mjaftueshëm. Zgjidh një foto tjetër më të vogël.");
-    const base=(file.name.replace(/\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
+    if(blob.size>maxBytes)throw new Error("Fotoja nuk u zvogëlua mjaftueshëm. Zgjidh një foto tjetër.");
+    const base=(sourceName.replace(/\\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
     return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+  }catch(error){
+    if(error instanceof Error&&/Kjo foto është HEIC/.test(error.message))throw error;
+    throw new Error(error instanceof Error?error.message:"Nuk arrita ta përgatis foton. Provo ta ruash si JPG dhe zgjidhe përsëri.");
   }finally{
-    URL.revokeObjectURL(objectUrl);
+    if(objectUrl)URL.revokeObjectURL(objectUrl);
   }
 }
 const supabase=createClient();
