@@ -47,17 +47,33 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   const isHeic=/^(heic|heif|heics|heifs)$/.test(ext)
     ||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type)
     ||heicBrand;
+
+  // Android photo providers sometimes return valid image bytes with an empty
+  // or generic MIME type. Sniff the header so the browser decodes the right format.
+  const headerBytes=new Uint8Array(await file.slice(0,32).arrayBuffer().catch(()=>new ArrayBuffer(0)));
+  const headerText=String.fromCharCode(...headerBytes);
+  let detectedMime="";
+  if(headerBytes[0]===0xff&&headerBytes[1]===0xd8&&headerBytes[2]===0xff)detectedMime="image/jpeg";
+  else if(headerText.startsWith("\x89PNG\r\n\x1a\n"))detectedMime="image/png";
+  else if(headerText.startsWith("GIF87a")||headerText.startsWith("GIF89a"))detectedMime="image/gif";
+  else if(headerText.startsWith("RIFF")&&headerText.slice(8,12)==="WEBP")detectedMime="image/webp";
+  else if(headerText.slice(4,12).includes("ftypavif")||headerText.slice(4,12).includes("ftypavis"))detectedMime="image/avif";
+  else if(heicBrand)detectedMime="image/heic";
+
   if(isHeic){
     try{
       const heic=await import("heic2any");
       const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
       source=Array.isArray(converted)?converted[0]:converted;
       if(!(source instanceof Blob)||source.size===0)throw new Error("Konvertimi nuk prodhoi foto.");
-    }catch(error:any){
-      throw new Error("Fotoja duket të jetë HEIC/HEIF, por nuk u konvertua. Hap foton në galeri dhe ruaje si JPG. "+(error?.message||""));
+    }catch(_heicConversionError){
+      // Some valid HEIF variants are natively decodable on newer Android
+      // browsers but are not supported by heic2any. Try native decoding too.
+      source=detectedMime?new Blob([file],{type:detectedMime}):file;
     }
+  }else if((!source.type||source.type==="application/octet-stream")&&detectedMime){
+    source=new Blob([file],{type:detectedMime});
   }
-
   // Decode the selected Blob directly. Avoid Compressor.js and browser-image-compression:
   // both depend on FileReader paths that fail for some Android gallery/provider files.
   let bitmap:ImageBitmap|null=null;
@@ -107,7 +123,9 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
           for(let offset=0;offset<bytes.length;offset+=chunkSize){
             binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length)));
           }
-          const mime=source.type||file.type||"application/octet-stream";
+          const mime=source.type&&source.type!=="application/octet-stream"
+            ?source.type
+            :(detectedMime||file.type||"image/jpeg");
           dataUrl="data:"+mime+";base64,"+btoa(binary);
         }catch(_arrayBufferError){
           dataUrl=await new Promise<string>((resolve,reject)=>{
