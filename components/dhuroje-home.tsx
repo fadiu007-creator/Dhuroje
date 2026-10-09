@@ -36,14 +36,25 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
 
   let source:Blob=file;
   const ext=file.name.split(".").pop()?.toLowerCase()||"";
-  const isHeic=/^(heic|heif|heics|heifs)$/.test(ext)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  let signature="";
+  try{
+    // Android's photo picker can give HEIC files a generic name or MIME type.
+    // Detect the actual container signature instead of relying on file.name/type.
+    const header=new Uint8Array(await file.slice(0,32).arrayBuffer());
+    signature=String.fromCharCode(...header);
+  }catch(_error){}
+  const heicBrand=/ftyp(heic|heix|hevc|hevx|heim|heis|heif|mif1|msf1)/i.test(signature);
+  const isHeic=/^(heic|heif|heics|heifs)$/.test(ext)
+    ||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type)
+    ||heicBrand;
   if(isHeic){
     try{
       const heic=await import("heic2any");
       const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
       source=Array.isArray(converted)?converted[0]:converted;
+      if(!(source instanceof Blob)||source.size===0)throw new Error("Konvertimi nuk prodhoi foto.");
     }catch(error:any){
-      throw new Error("Nuk u konvertua fotoja HEIC. "+(error?.message||"Provo të ruash foton si JPG."));
+      throw new Error("Fotoja duket të jetë HEIC/HEIF, por nuk u konvertua. Hap foton në galeri dhe ruaje si JPG. "+(error?.message||""));
     }
   }
 
