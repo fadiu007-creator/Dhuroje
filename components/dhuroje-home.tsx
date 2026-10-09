@@ -33,8 +33,8 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Promise<File|null>{
   if(!file || file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
-  const isHeic=/\\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
-  const supported=/^image\\/(jpeg|jpg|png|webp|gif|avif|heic|heif)$/i.test(file.type)||/\\.(jpe?g|png|webp|gif|avif|heic|heif)$/i.test(file.name);
+  const isHeic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  const supported=/^image\/(jpeg|jpg|png|webp|gif|avif|heic|heif)$/i.test(file.type)||/\.(jpe?g|png|webp|gif|avif|heic|heif)$/i.test(file.name);
   if(!supported)throw new Error("Zgjidh një foto JPG, PNG, WebP, GIF ose HEIC.");
 
   let source:Blob=file;
@@ -45,7 +45,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       const mod=await import("heic2any");
       const converted=await mod.default({blob:file,toType:"image/jpeg",quality:0.85});
       source=Array.isArray(converted)?converted[0]:converted;
-      sourceName=sourceName.replace(/\\.(heic|heif|heics|heifs)$/i,"")+".jpg";
+      sourceName=sourceName.replace(/\.(heic|heif|heics|heifs)$/i,"")+".jpg";
     }catch{
       throw new Error("Kjo foto është HEIC dhe telefoni nuk arriti ta konvertojë. Hape foton në Galeri dhe ruaje/eksportoje si JPG.");
     }
@@ -101,7 +101,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       attempts++;
     }
     if(blob.size>maxBytes)throw new Error("Fotoja nuk u zvogëlua mjaftueshëm. Zgjidh një foto tjetër.");
-    const base=(sourceName.replace(/\\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
+    const base=(sourceName.replace(/\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
     return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
   }catch(error){
     if(error instanceof Error&&/Kjo foto është HEIC/.test(error.message))throw error;
@@ -1170,7 +1170,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
 
   function time(v:string){return new Date(v).toLocaleTimeString("sq-AL",{hour:"2-digit",minute:"2-digit"});}
   function day(v:string){return new Date(v).toLocaleDateString("sq-AL",{day:"2-digit",month:"long",year:"numeric"});}
-  function initials(name:string){return (name||"P").trim().split(/\\s+/).slice(0,2).map((x:string)=>x[0]).join("").toUpperCase();}
+  function initials(name:string){return (name||"P").trim().split(/\s+/).slice(0,2).map((x:string)=>x[0]).join("").toUpperCase();}
   function selectConversation(id:string){
     setSelectedConversation(id);setMobileChat(true);setError("");
     const p=new URLSearchParams(window.location.search);
