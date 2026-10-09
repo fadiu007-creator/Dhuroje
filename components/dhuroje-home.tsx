@@ -146,6 +146,11 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       width=image.naturalWidth;height=image.naturalHeight;
     }
     if(!width||!height)throw new Error("Fotoja nuk ka përmasa të vlefshme.");
+    // An already-small JPEG is already in the storage format: keep its bytes
+    // instead of degrading it by encoding it a second time.
+    if(detectedMime==="image/jpeg"&&source.size<=maxBytes&&width<=maxDimension&&height<=maxDimension){
+      return new File([source],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+    }
     const scale=Math.min(1,maxDimension/Math.max(width,height));
     let outWidth=Math.max(1,Math.round(width*scale));
     let outHeight=Math.max(1,Math.round(height*scale));
@@ -164,9 +169,10 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       canvas.toBlob(blob=>blob&&blob.size>0?resolve(blob):reject(new Error("Shfletuesi nuk krijoi foton JPEG.")),"image/jpeg",quality);
     });
     let output:Blob|null=null;
-    for(let resize=0;resize<6;resize++){
+    // Continue reducing both quality and dimensions for difficult high-resolution photos.
+    for(let resize=0;resize<10;resize++){
       draw();
-      for(const quality of [0.82,0.72,0.62,0.52,0.42,0.32]){
+      for(const quality of [0.82,0.72,0.62,0.52,0.42,0.32,0.25]){
         const blob=await toJpeg(quality);
         if(!output||blob.size<output.size)output=blob;
         if(blob.size<=maxBytes){
@@ -185,6 +191,20 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
     if(objectUrl)URL.revokeObjectURL(objectUrl);
   }
 }
+// Aim for 500 KB, but allow a still-small 700 KB image if a complex photo
+// cannot reach 500 KB after the compressor has reduced quality and dimensions.
+// Never fall back to uploading the untouched, large original file.
+async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes=500*1024):Promise<File>{
+  try{
+    return await compressImage(file,maxDimension,targetBytes);
+  }catch(error:any){
+    const message=String(error?.message||error||"");
+    const sizeLimitFailure=message.includes("nën")&&message.includes("KB");
+    if(!sizeLimitFailure||targetBytes>=700*1024)throw error;
+    return await compressImage(file,maxDimension,700*1024);
+  }
+}
+
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -457,7 +477,7 @@ export default function DhurojeHome(){
         setUploadStage("Po përgatitet fotoja "+(i+1)+" nga "+totalFiles+"…");
         setUploadProgress(Math.max(5,Math.round((i/totalFiles)*90)));
         const compressed=await withTimeout(
-          compressImage(files[i],1200,500*1024),
+          compressPhotoWithFallback(files[i],1200,500*1024),
           75000,
           "Përgatitja e fotos zgjati shumë. Provo një foto tjetër."
         );
@@ -850,7 +870,7 @@ export default function DhurojeHome(){
     {showGive&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card listing-form-card" onSubmit={createListing}><div className="request-form-head"><div><p className="eyebrow">DHUROJE</p><h2>Çfarë dëshiron të dhurosh?</h2><span>Publiko diçka që nuk e përdor më dhe mund t’i nevojitet dikujt.</span></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       {postingCategory!=="Ushqim"&&<label>Gjendja e objektit<select name="condition" defaultValue="good" required><option value="new">Si i ri</option><option value="good">Në gjendje të mirë</option><option value="worn">I përdorur</option><option value="broken">I dëmtuar</option></select></label>}
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input key={photoInputKey} name="photos" type="file" accept="image/*,.heic,.heif" multiple disabled={preparingPhotos||posting||selectedPhotoFiles.length>=6} onClick={e=>{e.currentTarget.value="";}} onChange={async e=>{const input=e.currentTarget;const existing=selectedPhotoFiles;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,Math.max(0,6-existing.length));input.value="";if(!files.length){setPhotoInputKey(k=>k+1);return;}setPhotoError(false);setError("");setPreparingPhotos(true);setUploadStage("Po përgatiten fotot…");try{const ready:File[]=[];for(let i=0;i<files.length;i++){setUploadStage("Po përpunohet fotoja "+(i+1)+" nga "+files.length+"…");ready.push(await withTimeout(compressImage(files[i],1200,500*1024),75000,"Përgatitja e fotos zgjati shumë. Provo një foto tjetër."));}const next=[...existing,...ready].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));setUploadStage("");}catch(err:any){setPhotoError(true);setError("Kjo foto nuk mund të lexohej ose përpunohej. Ju lutem zgjidhni një foto tjetër me butonin “Shto foto”.");}finally{setPreparingPhotos(false);input.value="";setPhotoInputKey(k=>k+1);}}}/></label>{photoError&&<p className="form-inline-error" role="alert">Kjo foto nuk funksionoi. Ju lutem zgjidhni një foto tjetër te “Shto foto”.</p>}{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">{preparingPhotos?"Fotot po kompresohen në telefon para se të ruhen. Mos e mbyll këtë faqe.":"Minimum 1, maksimum 6 foto."}</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input key={photoInputKey} name="photos" type="file" accept="image/*,.heic,.heif" multiple disabled={preparingPhotos||posting||selectedPhotoFiles.length>=6} onClick={e=>{e.currentTarget.value="";}} onChange={async e=>{const input=e.currentTarget;const existing=selectedPhotoFiles;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,Math.max(0,6-existing.length));input.value="";if(!files.length){setPhotoInputKey(k=>k+1);return;}setPhotoError(false);setError("");setPreparingPhotos(true);setUploadStage("Po përgatiten fotot…");const ready:File[]=[];const failed:string[]=[];try{for(let i=0;i<files.length;i++){setUploadStage("Po përpunohet fotoja "+(i+1)+" nga "+files.length+"…");try{const compressed=await withTimeout(compressPhotoWithFallback(files[i],1200,500*1024),75000,"Përgatitja e fotos zgjati shumë.");ready.push(compressed);}catch(_err){failed.push(files[i].name||("Fotoja "+(i+1)));}}const next=[...existing,...ready].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(old=>{old.forEach(url=>URL.revokeObjectURL(url));return next.map(f=>URL.createObjectURL(f));});setUploadStage("");if(failed.length){setPhotoError(true);setError((ready.length?"Disa foto u shtuan, por këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Zgjidhi përsëri ose provo t'i ruash si JPG.");}else{setPhotoError(false);setError("");}}finally{setPreparingPhotos(false);input.value="";setPhotoInputKey(k=>k+1);}}}/></label>{photoError&&<p className="form-inline-error" role="alert">Kjo foto nuk funksionoi. Ju lutem zgjidhni një foto tjetër te “Shto foto”.</p>}{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">{preparingPhotos?"Fotot po kompresohen në telefon para se të ruhen. Mos e mbyll këtë faqe.":"Minimum 1, maksimum 6 foto."}</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
 {posting&&<div className="photo-upload-progress" role="status" aria-live="polite" style={{margin:"14px 0",padding:"12px",border:"1px solid #dce8df",borderRadius:"12px",background:"#f7fbf8"}}><div style={{display:"flex",justifyContent:"space-between",gap:"12px",marginBottom:"8px",fontSize:"14px",fontWeight:600}}><span>{uploadStage||"Po ngarkohet…"}</span><span>{uploadProgress}%</span></div><div role="progressbar" aria-label="Përparimi i ngarkimit të fotove" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress} style={{height:"8px",width:"100%",background:"#dfe8e1",borderRadius:"999px",overflow:"hidden"}}><div style={{height:"100%",width:uploadProgress+"%",background:"#23864b",borderRadius:"999px",transition:"width 160ms ease"}} /></div><small style={{display:"block",marginTop:"7px",color:"#52645a"}}>Mos e mbyll këtë faqe derisa të përfundojë ngarkimi.</small></div>}<button className="primary full" type="submit" disabled={posting||preparingPhotos||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
@@ -862,7 +882,7 @@ export default function DhurojeHome(){
       <label>Kategoria<select name="category" value={requestDraft.category} onChange={e=>setRequestDraft(v=>({...v,category:e.target.value}))}>{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
       <label>Qyteti<select name="location_name" value={requestDraft.location_name} onChange={e=>setRequestDraft(v=>({...v,location_name:e.target.value}))}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
       <label>Përshkrimi<textarea name="description" rows={4} maxLength={500} value={requestDraft.description} onChange={e=>setRequestDraft(v=>({...v,description:e.target.value}))} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
-      <div className="photo-picker request-photo-picker"><span className="photo-label">Foto <small>(opsionale)</small></span><label className="photo-button">➕ Shto foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=Array.from(input.files||[])[0];if(!file)return;try{setError("");const compressed=await compressImage(file,1200,500*1024);if(compressed){setRequestPhoto(compressed);setRequestPhotoPreview(URL.createObjectURL(compressed));}}catch(err:any){setError(err?.message||"Fotoja nuk mund të përpunohej.");}finally{input.value="";}}}/></label>{requestPhotoPreview&&<div className="photo-thumbnails"><div className="photo-thumbnail"><img src={requestPhotoPreview} alt="Foto e kërkesës"/><button type="button" className="photo-remove" onClick={()=>{setRequestPhoto(null);setRequestPhotoPreview("");}}>×</button></div></div>}<small className="form-help">.</small></div>
+      <div className="photo-picker request-photo-picker"><span className="photo-label">Foto <small>(opsionale)</small></span><label className="photo-button">➕ Shto foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=Array.from(input.files||[])[0];if(!file)return;try{setError("");const compressed=await compressPhotoWithFallback(file,1200,500*1024);if(compressed){setRequestPhoto(compressed);setRequestPhotoPreview(URL.createObjectURL(compressed));}}catch(err:any){setError(err?.message||"Fotoja nuk mund të përpunohej.");}finally{input.value="";}}}/></label>{requestPhotoPreview&&<div className="photo-thumbnails"><div className="photo-thumbnail"><img src={requestPhotoPreview} alt="Foto e kërkesës"/><button type="button" className="photo-remove" onClick={()=>{setRequestPhoto(null);setRequestPhotoPreview("");}}>×</button></div></div>}<small className="form-help">.</small></div>
       {error&&<div className="form-inline-error" role="alert">{error}</div>}
       <div className="request-form-actions"><button type="button" onClick={()=>setShowRequestForm(false)}>Anulo</button><button className="primary" type="submit" disabled={requestSaving}>{requestSaving?"Po ruhet...":"Publiko kërkesën"}</button></div>
     </form></div></div>}
@@ -988,7 +1008,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     }
     const remaining=photos.filter(x=>!removePhotoIds.includes(x.id));
     for(let i=0;i<Math.min(newFiles.length,6);i++){
-      const file=await compressImage(newFiles[i],1200,500*1024);
+      const file=await compressPhotoWithFallback(newFiles[i],1200,500*1024);
       const path=listing.owner_id+"/"+listing.id+"/"+(remaining.length+i)+"-"+crypto.randomUUID()+".jpg";
       const up=await uploadDhurojePhoto(path,file);
       if(up.error){setError(up.error.message||"Fotoja nuk u ngarkua.");setSaving(false);return;}
@@ -1009,7 +1029,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     <label>Qyteti<select name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
     {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
-    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={async e=>{const input=e.currentTarget;try{const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);const compressed:File[]=[];for(const file of files){const result=await compressImage(file,1200,500*1024);if(result)compressed.push(result);}setNewFiles(compressed);if(files.length&&!compressed.length)setError("Nuk u zgjodh asnjë foto e vlefshme.");}catch(err:any){setError(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}/></label></div>
+    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={async e=>{const input=e.currentTarget;const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);const compressed:File[]=[];const failed:string[]=[];setError("");try{for(const file of files){try{compressed.push(await compressPhotoWithFallback(file,1200,500*1024));}catch(_err){failed.push(file.name||"Foto");}}setNewFiles(compressed);if(failed.length)setError((compressed.length?"Disa foto u shtuan; këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Provo t'i ruash si JPG.");else if(files.length&&!compressed.length)setError("Nuk u zgjodh asnjë foto e vlefshme.");}finally{input.value="";}}}/></label></div>
     <button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj ndryshimet"}</button>
   </form></div>;
 }
@@ -1076,7 +1096,7 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
       <form className="profile-form" onSubmit={save}>
         <div className="profile-photo-editor">
           <div className="profile-photo-preview">{avatarPreview?<img src={avatarPreview} alt="Foto e profilit" />:<span>{(name||user.email||"P").slice(0,1).toUpperCase()}</span>}</div>
-          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressImage(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale</small></div>
+          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressPhotoWithFallback(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale</small></div>
         </div>
         <label>Emri<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
         <label>Qyteti <span className="required-mark">*</span><select value={city} onChange={e=>setCity(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
