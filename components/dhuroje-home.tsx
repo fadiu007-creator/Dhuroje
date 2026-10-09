@@ -102,8 +102,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
         });
       }catch(_blobDecodeError){
         let dataUrl="";
-        try{
-          // Try independent browser paths before declaring an Android provider
+        // Try independent browser paths before declaring an Android provider
           // file unreadable. Some picker-backed Blobs reject arrayBuffer(), while
           // the Blob slice or its temporary object URL can still yield the bytes.
           let bytes:Uint8Array|null=null;
@@ -152,7 +151,6 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
               reader.readAsDataURL(file);
             });
           }
-        }
         image=new Image();
         await new Promise<void>((resolve,reject)=>{
           image!.onload=()=>resolve();
