@@ -40,7 +40,8 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
     try{
       const heic=await import("heic2any");
       const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
-      source=Array.isArray(converted)?converted[0]:converted;
+      const convertedBlob=Array.isArray(converted)?converted[0]:converted;
+      source=new File([convertedBlob],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
     }catch{
       throw new Error("Telefoni nuk mundi ta konvertojë këtë foto HEIC. Në Galeri ruaje si JPG dhe provo përsëri.");
     }
