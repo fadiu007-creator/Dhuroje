@@ -35,40 +35,41 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
 
   let source:File=file;
-  const isHeic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  const ext=file.name.split(".").pop()?.toLowerCase()||"";
+  const isHeic=/^(heic|heif|heics|heifs)$/.test(ext)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
   if(isHeic){
     try{
       const heic=await import("heic2any");
       const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
       const blob=Array.isArray(converted)?converted[0]:converted;
       source=new File([blob],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }catch{
-      throw new Error("Nuk u konvertua fotoja HEIC. Nga Galeria ruaje si JPG dhe provo përsëri.");
+    }catch(error:any){
+      throw new Error("Nuk u konvertua fotoja HEIC. Provo ta ruash si JPG. "+(error?.message||""));
     }
+  } else {
+    const detectedType=file.type||(/\.png$/i.test(file.name)?"image/png":/\.webp$/i.test(file.name)?"image/webp":"image/jpeg");
+    if(file.type!==detectedType)source=new File([file],file.name,{type:detectedType,lastModified:file.lastModified||Date.now()});
   }
 
   const outputName=(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg";
-  const attempts:string[]=[];
-  // Try Compressor.js first, then browser-image-compression as a separate fallback.
+  const failures:string[]=[];
+  // Compressor.js is attempted first. Do not set convertSize to zero: let the
+  // library decode and re-encode all source formats consistently.
   try{
     const Compressor=(await import("compressorjs")).default;
     const result=await new Promise<Blob>((resolve,reject)=>{
       new Compressor(source,{
-        quality:0.82,
+        quality:0.78,
         maxWidth:maxDimension,
         maxHeight:maxDimension,
         mimeType:"image/jpeg",
-        convertSize:0,
-        success:(result:Blob)=>resolve(result),
+        success:(blob:Blob)=>blob&&blob.size>0?resolve(blob):reject(new Error("Dalja e kompresimit është bosh.")),
         error:(error:Error)=>reject(error)
       });
     });
-    if(result.size>0&&result.size<=maxBytes){
-      return new File([result],outputName,{type:"image/jpeg",lastModified:Date.now()});
-    }
-    if(result.size>maxBytes)attempts.push("Compressor.js nuk arriti madhësinë e kërkuar");
-    else attempts.push("Compressor.js prodhoi skedar bosh");
-  }catch{attempts.push("Compressor.js dështoi");}
+    if(result.size<=maxBytes)return new File([result],outputName,{type:"image/jpeg",lastModified:Date.now()});
+    failures.push("Compressor.js: fotoja mbeti mbi 700 KB");
+  }catch(error:any){failures.push("Compressor.js: "+(error?.message||String(error)||"dështoi"));}
 
   try{
     const imageCompression=(await import("browser-image-compression")).default;
@@ -77,17 +78,19 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       maxWidthOrHeight:maxDimension,
       useWebWorker:false,
       fileType:"image/jpeg",
-      initialQuality:0.75,
-      maxIteration:12,
+      initialQuality:0.68,
+      maxIteration:15,
       alwaysKeepResolution:false
     });
-    if(result&&result.size>0&&result.size<=maxBytes){
-      return new File([result],outputName,{type:"image/jpeg",lastModified:Date.now()});
-    }
-    attempts.push("browser-image-compression nuk arriti madhësinë e kërkuar");
-  }catch{attempts.push("browser-image-compression dështoi");}
+    if(result&&result.size>0&&result.size<=maxBytes)return new File([result],outputName,{type:"image/jpeg",lastModified:Date.now()});
+    if(result&&result.size>0){
+      const smaller=await imageCompression(source,{maxSizeMB:0.45,maxWidthOrHeight:1000,useWebWorker:false,fileType:"image/jpeg",initialQuality:0.5,maxIteration:15,alwaysKeepResolution:false});
+      if(smaller&&smaller.size>0&&smaller.size<result.size&&smaller.size<=maxBytes)return new File([smaller],outputName,{type:"image/jpeg",lastModified:Date.now()});
+      failures.push("browser-image-compression: rezultati mbeti mbi 700 KB");
+    }else failures.push("browser-image-compression: dalja ishte bosh");
+  }catch(error:any){failures.push("browser-image-compression: "+(error?.message||String(error)||"dështoi"));}
 
-  throw new Error("Nuk u përpunua fotoja. Provo një foto JPG/PNG të zakonshme ose bëj një screenshot të fotos dhe ngarko screenshot-in.");
+  throw new Error("Përpunimi dështoi. "+failures.join(" | ").slice(0,320));
 }
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
