@@ -33,6 +33,45 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Promise<File|null>{
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
   const makeBlob=(canvas:HTMLCanvasElement,type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
+  // Fast path: ask the browser to resize during decoding, avoiding a huge full-size
+  // canvas for modern phone photos (which can freeze mobile browsers at 5%).
+  if(!/\.(heic|heif|heics|heifs)$/i.test(file.name)&&!/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type)){
+    let bitmap:ImageBitmap|undefined;
+    try{
+      bitmap=await withTimeout(createImageBitmap(file),30000,"Telefoni nuk arriti ta hapë foton brenda 30 sekondave.");
+      const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.max(1,Math.round(bitmap.width*scale));
+      canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+      const ctx=canvas.getContext("2d");
+      if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
+      ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+      bitmap.close();bitmap=undefined;
+      for(const dimension of [maxDimension,900,700,500]){
+        const s=Math.min(1,dimension/Math.max(canvas.width,canvas.height));
+        const output=document.createElement("canvas");
+        output.width=Math.max(1,Math.round(canvas.width*s));
+        output.height=Math.max(1,Math.round(canvas.height*s));
+        const outCtx=output.getContext("2d");
+        if(!outCtx)continue;
+        outCtx.drawImage(canvas,0,0,output.width,output.height);
+        for(const [type,qualities] of [["image/webp",[.78,.62,.48,.34]],["image/jpeg",[.7,.54,.4,.28]]] as [string,number[]][]){
+          for(const quality of qualities){
+            const blob=await withTimeout(makeBlob(output,type,quality),20000,"Kompresimi i fotos zgjati shumë. Provo një foto tjetër.");
+            if(blob&&blob.size>0&&blob.size<=maxBytes){
+              return new File([blob],"photo."+(type==="image/webp"?"webp":"jpg"),{type,lastModified:Date.now()});
+            }
+          }
+        }
+      }
+      // If the quick path couldn't reach the size target, fall through to the
+      // compatibility path below.
+    }catch(fastError){
+      // Continue to the HEIC/native-image compatibility path below.
+    }finally{
+      try{bitmap?.close();}catch{}
+    }
+  }
   const loadImage=(blob:Blob,timeoutMs=60000)=>withTimeout(new Promise<HTMLImageElement>((resolve,reject)=>{
     const url=URL.createObjectURL(blob);
     const img=new Image();
