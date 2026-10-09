@@ -34,63 +34,83 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   if(!file||file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
 
-  let source:File=file;
+  let source:Blob=file;
   const ext=file.name.split(".").pop()?.toLowerCase()||"";
   const isHeic=/^(heic|heif|heics|heifs)$/.test(ext)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
   if(isHeic){
     try{
       const heic=await import("heic2any");
       const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
-      const blob=Array.isArray(converted)?converted[0]:converted;
-      source=new File([blob],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+      source=Array.isArray(converted)?converted[0]:converted;
     }catch(error:any){
-      throw new Error("Nuk u konvertua fotoja HEIC. Provo ta ruash si JPG. "+(error?.message||""));
+      throw new Error("Nuk u konvertua fotoja HEIC. "+(error?.message||"Provo të ruash foton si JPG."));
     }
-  } else {
-    const detectedType=file.type||(/\.png$/i.test(file.name)?"image/png":/\.webp$/i.test(file.name)?"image/webp":"image/jpeg");
-    if(file.type!==detectedType)source=new File([file],file.name,{type:detectedType,lastModified:file.lastModified||Date.now()});
   }
 
-  const outputName=(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg";
-  const failures:string[]=[];
-  // Compressor.js is attempted first. Do not set convertSize to zero: let the
-  // library decode and re-encode all source formats consistently.
+  // Decode the selected Blob directly. Avoid Compressor.js and browser-image-compression:
+  // both depend on FileReader paths that fail for some Android gallery/provider files.
+  let bitmap:ImageBitmap|null=null;
+  let image:HTMLImageElement|null=null;
+  let objectUrl:string|null=null;
+  let width=0,height=0;
   try{
-    const Compressor=(await import("compressorjs")).default;
-    const result=await new Promise<Blob>((resolve,reject)=>{
-      new Compressor(source,{
-        quality:0.78,
-        maxWidth:maxDimension,
-        maxHeight:maxDimension,
-        mimeType:"image/jpeg",
-        success:(blob:Blob)=>blob&&blob.size>0?resolve(blob):reject(new Error("Dalja e kompresimit është bosh.")),
-        error:(error:Error)=>reject(error)
+    if(typeof createImageBitmap==="function"){
+      try{
+        bitmap=await createImageBitmap(source);
+        width=bitmap.width;height=bitmap.height;
+      }catch(_error){
+        bitmap=null;
+      }
+    }
+    if(!bitmap){
+      objectUrl=URL.createObjectURL(source);
+      image=new Image();
+      await new Promise<void>((resolve,reject)=>{
+        image!.onload=()=>resolve();
+        image!.onerror=()=>reject(new Error("Shfletuesi nuk mund ta dekodojë foton. Zgjidh foton nga galeria përsëri."));
+        image!.src=objectUrl!;
       });
+      width=image.naturalWidth;height=image.naturalHeight;
+    }
+    if(!width||!height)throw new Error("Fotoja nuk ka përmasa të vlefshme.");
+    const scale=Math.min(1,maxDimension/Math.max(width,height));
+    let outWidth=Math.max(1,Math.round(width*scale));
+    let outHeight=Math.max(1,Math.round(height*scale));
+    const canvas=document.createElement("canvas");
+    const context=canvas.getContext("2d");
+    if(!context)throw new Error("Shfletuesi nuk mbështet përpunimin e fotos.");
+    const draw=()=>{
+      canvas.width=outWidth;canvas.height=outHeight;
+      const ctx=canvas.getContext("2d");
+      if(!ctx)throw new Error("Nuk u krijua kanavaca e fotos.");
+      ctx.fillStyle="#ffffff";ctx.fillRect(0,0,outWidth,outHeight);
+      if(bitmap)ctx.drawImage(bitmap,0,0,outWidth,outHeight);
+      else if(image)ctx.drawImage(image,0,0,outWidth,outHeight);
+    };
+    const toJpeg=(quality:number)=>new Promise<Blob>((resolve,reject)=>{
+      canvas.toBlob(blob=>blob&&blob.size>0?resolve(blob):reject(new Error("Shfletuesi nuk krijoi foton JPEG.")),"image/jpeg",quality);
     });
-    if(result.size<=maxBytes)return new File([result],outputName,{type:"image/jpeg",lastModified:Date.now()});
-    failures.push("Compressor.js: fotoja mbeti mbi 700 KB");
-  }catch(error:any){failures.push("Compressor.js: "+(error?.message||String(error)||"dështoi"));}
-
-  try{
-    const imageCompression=(await import("browser-image-compression")).default;
-    const result=await imageCompression(source,{
-      maxSizeMB:maxBytes/(1024*1024),
-      maxWidthOrHeight:maxDimension,
-      useWebWorker:false,
-      fileType:"image/jpeg",
-      initialQuality:0.68,
-      maxIteration:15,
-      alwaysKeepResolution:false
-    });
-    if(result&&result.size>0&&result.size<=maxBytes)return new File([result],outputName,{type:"image/jpeg",lastModified:Date.now()});
-    if(result&&result.size>0){
-      const smaller=await imageCompression(source,{maxSizeMB:0.45,maxWidthOrHeight:1000,useWebWorker:false,fileType:"image/jpeg",initialQuality:0.5,maxIteration:15,alwaysKeepResolution:false});
-      if(smaller&&smaller.size>0&&smaller.size<result.size&&smaller.size<=maxBytes)return new File([smaller],outputName,{type:"image/jpeg",lastModified:Date.now()});
-      failures.push("browser-image-compression: rezultati mbeti mbi 700 KB");
-    }else failures.push("browser-image-compression: dalja ishte bosh");
-  }catch(error:any){failures.push("browser-image-compression: "+(error?.message||String(error)||"dështoi"));}
-
-  throw new Error("Përpunimi dështoi. "+failures.join(" | ").slice(0,320));
+    let output:Blob|null=null;
+    for(let resize=0;resize<6;resize++){
+      draw();
+      for(const quality of [0.82,0.72,0.62,0.52,0.42,0.32]){
+        const blob=await toJpeg(quality);
+        if(!output||blob.size<output.size)output=blob;
+        if(blob.size<=maxBytes){
+          return new File([blob],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+        }
+      }
+      outWidth=Math.max(1,Math.round(outWidth*0.78));
+      outHeight=Math.max(1,Math.round(outHeight*0.78));
+    }
+    if(output&&output.size<=maxBytes)return new File([output],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+    throw new Error("Fotoja nuk u zvogëlua nën "+Math.round(maxBytes/1024)+" KB. Provo një foto me rezolucion më të ulët.");
+  }catch(error:any){
+    throw new Error("Fotoja nuk mund të lexohej ose përpunohej. "+(error?.message||String(error)||"Provo të zgjedhësh foton përsëri."));
+  }finally{
+    if(bitmap)bitmap.close();
+    if(objectUrl)URL.revokeObjectURL(objectUrl);
+  }
 }
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
