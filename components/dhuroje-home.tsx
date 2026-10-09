@@ -87,9 +87,21 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       }catch(_blobDecodeError){
         let dataUrl="";
         try{
-          // Prefer the File/Blob byte API: Android content providers sometimes
-          // reject FileReader even though the selected file is still readable.
-          const bytes=new Uint8Array(await source.arrayBuffer());
+          // Try independent browser paths before declaring an Android provider
+          // file unreadable. Some picker-backed Blobs reject arrayBuffer(), while
+          // the Blob slice or its temporary object URL can still yield the bytes.
+          let bytes:Uint8Array|null=null;
+          try{bytes=new Uint8Array(await source.arrayBuffer());}catch(_directReadError){}
+          if(!bytes){
+            try{bytes=new Uint8Array(await source.slice(0,source.size,source.type).arrayBuffer());}catch(_sliceReadError){}
+          }
+          if(!bytes&&objectUrl){
+            try{
+              const response=await fetch(objectUrl);
+              if(response.ok)bytes=new Uint8Array(await response.arrayBuffer());
+            }catch(_urlReadError){}
+          }
+          if(!bytes)throw new Error("Nuk u lexuan bajtet e fotos.");
           let binary="";
           const chunkSize=0x8000;
           for(let offset=0;offset<bytes.length;offset+=chunkSize){
@@ -101,7 +113,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
           dataUrl=await new Promise<string>((resolve,reject)=>{
             const reader=new FileReader();
             reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari u zgjodh, por telefoni nuk lejoi leximin e bajteve. Zgjidhe përsëri nga Galeria ose ruaje si JPG në pajisje."));
-            reader.onerror=()=>reject(new Error("Telefoni nuk lejoi leximin e skedarit. Provo ta ruash foton lokalisht si JPG dhe zgjidhe përsëri."));
+            reader.onerror=()=>reject(new Error("Telefoni/galeria nuk lejoi leximin e kësaj fotoje. Provo ta hapësh në Galeri dhe zgjidh 'Shkarko' ose 'Ruaj në pajisje', pastaj provo përsëri."));
             reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
             reader.readAsDataURL(source);
           });
