@@ -74,13 +74,31 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       }
     }
     if(!bitmap){
-      objectUrl=URL.createObjectURL(source);
+      // Some Android gallery providers expose a temporary Blob URL that fails
+      // to decode, while a data URL from the same bytes works. Try both paths.
       image=new Image();
-      await new Promise<void>((resolve,reject)=>{
-        image!.onload=()=>resolve();
-        image!.onerror=()=>reject(new Error("Shfletuesi nuk mund ta dekodojë foton. Zgjidh foton nga galeria përsëri."));
-        image!.src=objectUrl!;
-      });
+      try{
+        objectUrl=URL.createObjectURL(source);
+        await new Promise<void>((resolve,reject)=>{
+          image!.onload=()=>resolve();
+          image!.onerror=()=>reject(new Error("Blob URL decode failed"));
+          image!.src=objectUrl!;
+        });
+      }catch(_blobDecodeError){
+        const dataUrl=await new Promise<string>((resolve,reject)=>{
+          const reader=new FileReader();
+          reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari nuk u lexua nga galeria."));
+          reader.onerror=()=>reject(new Error("Galeria nuk lejoi leximin e skedarit."));
+          reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
+          reader.readAsDataURL(source);
+        });
+        image=new Image();
+        await new Promise<void>((resolve,reject)=>{
+          image!.onload=()=>resolve();
+          image!.onerror=()=>reject(new Error("Shfletuesi nuk e mbështet këtë format fotoje ("+(file.type||"format i panjohur")+"). Provo ta ruash si JPG."));
+          image!.src=dataUrl;
+        });
+      }
       width=image.naturalWidth;height=image.naturalHeight;
     }
     if(!width||!height)throw new Error("Fotoja nuk ka përmasa të vlefshme.");
