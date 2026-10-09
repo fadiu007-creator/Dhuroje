@@ -60,6 +60,35 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   else if(headerText.slice(4,12).includes("ftypavif")||headerText.slice(4,12).includes("ftypavis"))detectedMime="image/avif";
   else if(heicBrand)detectedMime="image/heic";
 
+  // Snapshot picker-backed files into ordinary in-memory bytes before decoding.
+  // Some gallery/document providers expose a File that can be selected and sliced
+  // for its header but fails when image decoders/FileReader consume the live handle.
+  // A fresh Blob detaches processing from that temporary provider handle.
+  try{
+    let snapshot:Uint8Array|null=null;
+    if(typeof file.stream==="function"){
+      try{
+        const reader=file.stream().getReader();
+        const chunks:Uint8Array[]=[];
+        let total=0;
+        while(true){
+          const part=await reader.read();
+          if(part.done)break;
+          if(part.value){chunks.push(part.value);total+=part.value.length;}
+          if(total>50*1024*1024)throw new Error("Fotoja është më e madhe se 50 MB.");
+        }
+        if(total){snapshot=new Uint8Array(total);let offset=0;for(const chunk of chunks){snapshot.set(chunk,offset);offset+=chunk.length;}}
+      }catch(_streamReadError){snapshot=null;}
+    }
+    if(!snapshot){
+      try{const buffer=await file.arrayBuffer();if(buffer.byteLength)snapshot=new Uint8Array(buffer);}catch(_arrayBufferReadError){}
+    }
+    if(snapshot){
+      const mime=detectedMime||file.type||"application/octet-stream";
+      source=new Blob([snapshot],{type:mime});
+    }
+  }catch(_snapshotError){}
+
   if(isHeic){
     try{
       const heic=await import("heic2any");
