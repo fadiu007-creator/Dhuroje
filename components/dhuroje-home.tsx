@@ -395,16 +395,23 @@ export default function DhurojeHome(){
       // in the background, uploaded, and only then referenced by the database.
       const totalFiles=Math.min(files.length,6);
       for(let i=0;i<totalFiles;i++){
+        // Compression happens before network transfer, so never leave the progress bar at 0%.
+        // Reserve the first 5% for preparation and 5–90% for the actual upload.
         setUploadStage("Po përgatitet fotoja "+(i+1)+" nga "+totalFiles+"…");
-        setUploadProgress(Math.round((i/totalFiles)*90));
-        const compressed=await compressImage(files[i],1200,500*1024);
+        setUploadProgress(Math.max(5,Math.round((i/totalFiles)*90)));
+        const compressed=await withTimeout(
+          compressImage(files[i],1200,500*1024),
+          75000,
+          "Përgatitja e fotos zgjati shumë. Provo një foto tjetër."
+        );
         if(!compressed)throw new Error("Fotoja "+(i+1)+" nuk mund të përpunohej.");
+        setUploadProgress(Math.max(8,Math.round(((i+0.05)/totalFiles)*90)));
         const ext=compressed.type==="image/webp"?"webp":"jpg";
         const path=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
         setUploadStage("Po ngarkohet fotoja "+(i+1)+" nga "+totalFiles+"…");
         const up=await uploadDhurojePhoto(path,compressed,(loaded,total)=>{
           const fraction=total>0?Math.min(1,loaded/total):0;
-          setUploadProgress(Math.min(90,Math.round(((i+fraction)/totalFiles)*90)));
+          setUploadProgress(Math.min(90,Math.max(8,Math.round(((i+fraction)/totalFiles)*90))));
         });
         if(up.error)throw new Error("Fotoja "+(i+1)+" nuk u ngarkua: "+(up.error.message||"Failed to fetch"));
         uploadedPaths.push(path);
