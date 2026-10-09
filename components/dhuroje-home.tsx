@@ -30,47 +30,59 @@ function safeFormData(form: HTMLFormElement): FormData{
 
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
 
-async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promise<File|null>{
-  if(!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name))return null;
-  if(file.size>15*1024*1024)throw new Error("Fotoja origjinale duhet të jetë maksimumi 15 MB.");
-
+async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Promise<File|null>{
+  if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
+  const makeBlob=(canvas:HTMLCanvasElement,type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
+  const loadImage=(blob:Blob,timeoutMs=60000)=>withTimeout(new Promise<HTMLImageElement>((resolve,reject)=>{
+    const url=URL.createObjectURL(blob);
+    const img=new Image();
+    const cleanup=()=>URL.revokeObjectURL(url);
+    img.onload=()=>{cleanup();resolve(img);};
+    img.onerror=()=>{cleanup();reject(new Error("decode"));};
+    img.src=url;
+  }),timeoutMs,"Leximi i fotos po zgjat shumë. Provo përsëri.");
   let source:Blob=file;
-  const isHeic=/\.(heic|heif)$/i.test(file.name)||/image\/(heic|heif)/i.test(file.type);
+  const isHeic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  const isLikelyImage=file.type.startsWith("image/")||isHeic||!file.type;
+  if(!isLikelyImage)throw new Error("Ky skedar nuk duket të jetë foto. Zgjidh një fotografi nga telefoni.");
   if(isHeic){
     try{
       const mod=await import("heic2any");
       const convert=(mod as any).default||mod;
-      const converted=await convert({blob:file,toType:"image/jpeg",quality:.88});
+      const converted=await convert({blob:file,toType:"image/jpeg",quality:.9});
       source=Array.isArray(converted)?converted[0]:converted;
     }catch{
-      throw new Error("Ky format HEIC/HEIF nuk mund të lexohet. Ruaje foton si JPG dhe provo përsëri.");
+      throw new Error("Telefoni nuk mundi ta konvertojë këtë foto HEIC/HEIF. Provo ta ndash foton nga Galeria si JPG.");
     }
   }
-
-  let image:HTMLImageElement|null=null;
-  let objectUrl:string|null=null;
+  let image:HTMLImageElement;
   try{
-    objectUrl=URL.createObjectURL(source);
-    image=await withTimeout(new Promise<HTMLImageElement>((resolve,reject)=>{
-      const img=new Image();
-      img.onload=()=>resolve(img);
-      img.onerror=()=>reject(new Error("decode"));
-      img.src=objectUrl!;
-    }),10000,"Përpunimi i fotos po zgjat shumë. Provo një foto tjetër ose më të vogël.");
+    image=await loadImage(source,60000);
   }catch{
-    if(objectUrl)URL.revokeObjectURL(objectUrl);
-    // Never upload the original as a fallback: large originals can exceed the
-    // Storage bucket limit and bypass the compression requirement.
-    throw new Error("Fotoja nuk mund të përpunohej në këtë format. Provo JPG ose PNG, ose bëj një pamje ekrani të fotos.");
-  }finally{
-    if(objectUrl)URL.revokeObjectURL(objectUrl);
+    // Browser-native decode failed; try the browser's built-in image decoder
+    // on common phone formats, then HEIC conversion as a last supported path.
+    try{
+      const bitmap=await withTimeout(createImageBitmap(source),60000,"Leximi i fotos po zgjat shumë.");
+      const canvas=document.createElement("canvas");
+      const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
+      canvas.width=Math.max(1,Math.round(bitmap.width*scale));
+      canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+      const ctx=canvas.getContext("2d");
+      if(!ctx){bitmap.close();throw new Error("canvas");}
+      ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
+      let blob:Blob|null=null;
+      for(const q of [.82,.7,.58,.46,.34]){
+        blob=await makeBlob(canvas,"image/jpeg",q);
+        if(blob&&blob.size<=maxBytes)break;
+      }
+      if(!blob||blob.size>maxBytes)throw new Error("size");
+      return new File([blob],"photo.jpg",{type:"image/jpeg",lastModified:Date.now()});
+    }catch{
+      throw new Error("Nuk mund të lexohet ky format fotografie në këtë shfletues. Provo ta zgjedhësh foton përmes Galerisë së telefonit.");
+    }
   }
-
-  const makeBlob=(canvas:HTMLCanvasElement,type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
   let blob:Blob|null=null;
-  // Retry at progressively smaller dimensions so high-resolution phone photos
-  // reliably fit the storage target instead of failing after one pass.
-  for(const dimension of [maxDimension,1000,800,640]){
+  for(const dimension of [maxDimension,1000,800,640,480]){
     const scale=Math.min(1,dimension/Math.max(image.naturalWidth,image.naturalHeight));
     const canvas=document.createElement("canvas");
     canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
@@ -78,22 +90,19 @@ async function compressImage(file:File,maxDimension=900,maxBytes=500*1024):Promi
     const ctx=canvas.getContext("2d");
     if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
     ctx.drawImage(image,0,0,canvas.width,canvas.height);
-    for(const quality of [.82,.72,.62,.52,.42,.32]){
-      blob=await makeBlob(canvas,"image/webp",quality);
-      if(blob&&blob.size<=maxBytes)break;
-    }
-    if(!blob||blob.size>maxBytes){
-      for(const quality of [.70,.55,.40]){
-        blob=await makeBlob(canvas,"image/jpeg",quality);
+    for(const type of ["image/webp","image/jpeg"]){
+      const qualities=type==="image/webp"?[.84,.74,.64,.54,.44,.34]:[.76,.64,.52,.4,.3];
+      for(const quality of qualities){
+        blob=await makeBlob(canvas,type,quality);
         if(blob&&blob.size<=maxBytes)break;
       }
+      if(blob&&blob.size<=maxBytes)break;
     }
     if(blob&&blob.size<=maxBytes)break;
   }
-  if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej nën 500 KB. Provo një foto tjetër.");
-  const type=blob.type||"image/webp";
-  const ext=type==="image/jpeg"?"jpg":"webp";
-  return new File([blob],"photo."+ext,{type,lastModified:Date.now()});
+  if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej. Provo një foto tjetër.");
+  const type=blob.type||"image/jpeg";
+  return new File([blob],"photo."+(type==="image/webp"?"webp":"jpg"),{type,lastModified:Date.now()});
 }
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -115,8 +124,8 @@ async function uploadDhurojePhoto(path:string,file:File):Promise<{data:any;error
   try{
     return await withTimeout(
       supabase.storage.from("dhuroje-listings").upload(path,file,{contentType:file.type,upsert:false}),
-      30000,
-      "Ngarkimi i fotos po zgjat shumë. Kontrollo internetin dhe provo përsëri."
+      180000,
+      "Ngarkimi i fotos dështoi pas 3 minutash. Kontrollo lidhjen dhe provo përsëri."
     );
   }catch(error:any){
     return {data:null,error};
