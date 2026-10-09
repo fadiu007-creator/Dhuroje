@@ -1,1 +1,25 @@
-{"name":"dhuroje","version":"0.1.0","private":true,"scripts":{"dev":"next dev","build":"next build","start":"next start"},"dependencies":{"@supabase/ssr":"^0.7.0","@supabase/supabase-js":"^2.57.4","next":"^16.0.1","react":"^19.2.0","react-dom":"^19.2.0","heic2any":"^0.0.4"},"devDependencies":{"@types/node":"^22.18.0","@types/react":"^19.2.2","@types/react-dom":"^19.2.2","typescript":"^5.9.3"}}
+{
+  "name": "dhuroje",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.57.4",
+    "next": "^16.0.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "heic2any": "^0.0.4",
+    "browser-image-compression": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.9.3"
+  }
+}
