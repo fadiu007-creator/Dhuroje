@@ -60,6 +60,14 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   else if(headerText.slice(4,12).includes("ftypavif")||headerText.slice(4,12).includes("ftypavis"))detectedMime="image/avif";
   else if(heicBrand)detectedMime="image/heic";
 
+  // Fast path for a valid, already-small JPEG: this file is already below the
+  // requested storage limit, so do not force it through browser decoders that can
+  // fail on picker-backed files. The JPEG signature was verified from its header.
+  // This is not an oversized-original fallback: it is already within maxBytes.
+  if(detectedMime==="image/jpeg"&&file.size<=maxBytes){
+    return new File([file],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:file.lastModified||Date.now()});
+  }
+
   // Snapshot picker-backed files into ordinary in-memory bytes before decoding.
   // Some gallery/document providers expose a File that can be selected and sliced
   // for its header but fails when image decoders/FileReader consume the live handle.
