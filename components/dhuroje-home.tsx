@@ -64,8 +64,14 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   // requested storage limit, so do not force it through browser decoders that can
   // fail on picker-backed files. The JPEG signature was verified from its header.
   // This is not an oversized-original fallback: it is already within maxBytes.
-  if(detectedMime==="image/jpeg"&&file.size<=maxBytes){
-    return new File([file],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:file.lastModified||Date.now()});
+  if(detectedMime==="image/jpeg"&&file.size<=700*1024){
+    // Keep already-small JPEGs out of the browser decoding pipeline. This is
+    // still within the hard 700 KB storage cap, and avoids false failures from
+    // gallery-backed File objects that cannot be decoded by canvas/FileReader.
+    // Preserve the original bytes only when the JPEG is already under the cap.
+    const bytes=await file.arrayBuffer();
+    if(bytes.byteLength!==file.size)throw new Error("Skedari JPEG u lexua pjesërisht. Zgjidhe përsëri nga memoria e telefonit.");
+    return new File([bytes],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:file.lastModified||Date.now()});
   }
 
   // Snapshot picker-backed files into ordinary in-memory bytes before decoding.
