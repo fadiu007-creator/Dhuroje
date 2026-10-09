@@ -872,3 +872,30 @@ body{font-size:14px!important}
 .messages-workspace .message-row.mine .bubble{background:var(--v-green)!important;border-color:var(--v-green)!important;color:#fff!important}
 .messages-workspace .message-row .bubble small{color:#6f7975!important}
 .messages-workspace .message-row.mine .bubble small{color:#d5eeeb!important}
+
+
+/* Consistent listing thumbnails: portrait and landscape photos use the same fixed frame. */
+.card-image,
+.geev-card-image,
+.explore-card-image,
+.geev-feature-image {
+  overflow: hidden !important;
+  flex: 0 0 auto;
+}
+.card-image img,
+.geev-card-image img,
+.explore-card-image img,
+.geev-feature-image img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
+.geev-card-body,
+.explore-card-body,
+.card-body {
+  min-width: 0;
+  flex: 0 0 auto;
+}
