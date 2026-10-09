@@ -40,11 +40,33 @@ async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Prom
   if(!isHeicFile){
     let bitmap:ImageBitmap|undefined;
     try{
-      bitmap=await withTimeout(
-        createImageBitmap(file,{resizeWidth:maxDimension,resizeHeight:maxDimension,resizeQuality:"high"}),
-        25000,
-        "Telefoni nuk arriti ta hapë foton brenda 25 sekondave. Provo ta ruash si JPG."
-      );
+      try{
+        bitmap=await withTimeout(
+          createImageBitmap(file,{resizeWidth:maxDimension,resizeHeight:maxDimension,resizeQuality:"high"}),
+          25000,
+          "Telefoni nuk arriti ta hapë foton brenda 25 sekondave."
+        );
+      }catch(firstDecodeError:any){
+        // Some Android galleries provide HEIC/HEIF photos with a generic MIME
+        // type and a .jpg-looking filename. Try converting once before failing.
+        try{
+          const mod=await import("heic2any");
+          const convert=(mod as any).default||mod;
+          const converted=await withTimeout(
+            Promise.resolve(convert({blob:file,toType:"image/jpeg",quality:.88})),
+            30000,
+            "Konvertimi i fotos zgjati shumë. Provo ta ruash si JPG."
+          );
+          const jpeg=Array.isArray(converted)?converted[0]:converted;
+          bitmap=await withTimeout(
+            createImageBitmap(jpeg,{resizeWidth:maxDimension,resizeHeight:maxDimension,resizeQuality:"high"}),
+            25000,
+            "Telefoni nuk arriti ta hapë foton edhe pas konvertimit."
+          );
+        }catch(conversionError:any){
+          throw new Error("Nuk arrita ta lexoj foton ("+(file.type||"format i panjohur")+", "+Math.round(file.size/1024)+" KB). Provo ta zgjedhësh përsëri nga Galeria ose ruaje si JPG/PNG.");
+        }
+      }
       const canvas=document.createElement("canvas");
       canvas.width=Math.max(1,bitmap.width);
       canvas.height=Math.max(1,bitmap.height);
