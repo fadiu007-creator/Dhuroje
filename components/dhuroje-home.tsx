@@ -33,8 +33,8 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Promise<File|null>{
   if(!file || file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
-  const heic=/\\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
-  const supported=/^image\\/(jpeg|jpg|png|webp|gif|avif)$/i.test(file.type)||/\\.(jpe?g|png|webp|gif|avif)$/i.test(file.name);
+  const heic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  const supported=/^image\/(jpeg|jpg|png|webp|gif|avif)$/i.test(file.type)||/\.(jpe?g|png|webp|gif|avif)$/i.test(file.name);
   if(heic)throw new Error("Ky telefon jep foton në format HEIC. Zgjidhe si JPG nga Galeria që të mund të ngarkohet.");
   if(!supported)throw new Error("Zgjidh një foto JPG, PNG, WebP ose GIF.");
 
@@ -76,7 +76,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       attempts++;
     }
     if(blob.size>maxBytes)throw new Error("Fotoja nuk u zvogëlua mjaftueshëm. Zgjidh një foto tjetër më të vogël.");
-    const base=(file.name.replace(/\\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
+    const base=(file.name.replace(/\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
     return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
   }finally{
     URL.revokeObjectURL(objectUrl);
