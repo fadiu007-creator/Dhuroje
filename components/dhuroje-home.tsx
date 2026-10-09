@@ -117,24 +117,41 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
               if(response.ok)bytes=new Uint8Array(await response.arrayBuffer());
             }catch(_urlReadError){}
           }
-          if(!bytes)throw new Error("Nuk u lexuan bajtet e fotos.");
-          let binary="";
-          const chunkSize=0x8000;
-          for(let offset=0;offset<bytes.length;offset+=chunkSize){
-            binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length)));
+          if(!bytes){
+            // Retry against the original File object. Some browser picker providers
+            // expose a readable File but fail after it is wrapped in a Blob.
+            try{bytes=new Uint8Array(await file.arrayBuffer());}catch(_originalReadError){}
           }
-          const mime=source.type&&source.type!=="application/octet-stream"
-            ?source.type
-            :(detectedMime||file.type||"image/jpeg");
-          dataUrl="data:"+mime+";base64,"+btoa(binary);
-        }catch(_arrayBufferError){
-          dataUrl=await new Promise<string>((resolve,reject)=>{
-            const reader=new FileReader();
-            reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari u zgjodh, por telefoni nuk lejoi leximin e bajteve. Zgjidhe përsëri nga Galeria ose ruaje si JPG në pajisje."));
-            reader.onerror=()=>reject(new Error("Telefoni/galeria nuk lejoi leximin e kësaj fotoje. Provo ta hapësh në Galeri dhe zgjidh 'Shkarko' ose 'Ruaj në pajisje', pastaj provo përsëri."));
-            reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
-            reader.readAsDataURL(source);
-          });
+          if(!bytes){
+            try{bytes=await new Promise<Uint8Array>((resolve,reject)=>{
+              const reader=new FileReader();
+              reader.onload=()=>reader.result instanceof ArrayBuffer?resolve(new Uint8Array(reader.result)):reject(new Error("Leximi i bajteve dështoi."));
+              reader.onerror=()=>reject(new Error("Leximi i skedarit origjinal dështoi."));
+              reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
+              reader.readAsArrayBuffer(file);
+            });}catch(_originalReaderError){}
+          }
+          if(bytes){
+            let binary="";
+            const chunkSize=0x8000;
+            for(let offset=0;offset<bytes.length;offset+=chunkSize){
+              binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length)));
+            }
+            const mime=source.type&&source.type!=="application/octet-stream"
+              ?source.type
+              :(detectedMime||file.type||"image/jpeg");
+            dataUrl="data:"+mime+";base64,"+btoa(binary);
+          }else{
+            // Last resort: read the original picker File directly as a data URL,
+            // not the derived Blob. This covers providers that reject Blob reads.
+            dataUrl=await new Promise<string>((resolve,reject)=>{
+              const reader=new FileReader();
+              reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari u zgjodh, por telefoni nuk lejoi leximin e bajteve."));
+              reader.onerror=()=>reject(new Error("Telefoni/galeria nuk lejoi leximin e kësaj fotoje. Shkarkoje ose ruaje lokalisht nga Galeria dhe provo përsëri."));
+              reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
+              reader.readAsDataURL(file);
+            });
+          }
         }
         image=new Image();
         await new Promise<void>((resolve,reject)=>{
