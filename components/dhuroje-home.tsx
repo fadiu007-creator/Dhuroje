@@ -33,41 +33,50 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Promise<File|null>{
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
   const makeBlob=(canvas:HTMLCanvasElement,type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
-  // Fast path: ask the browser to resize during decoding, avoiding a huge full-size
-  // canvas for modern phone photos (which can freeze mobile browsers at 5%).
-  if(!/\.(heic|heif|heics|heifs)$/i.test(file.name)&&!/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type)){
+  // Standard phone photos: decode directly to a small bitmap. Do not fall back
+  // to decoding the original full-resolution image, which can freeze mobile
+  // browsers and leave the progress indicator at 5%.
+  const isHeicFile=/\\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  if(!isHeicFile){
     let bitmap:ImageBitmap|undefined;
     try{
-      bitmap=await withTimeout(createImageBitmap(file),30000,"Telefoni nuk arriti ta hapë foton brenda 30 sekondave.");
-      const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
+      bitmap=await withTimeout(
+        createImageBitmap(file,{resizeWidth:maxDimension,resizeHeight:maxDimension,resizeQuality:"high"}),
+        25000,
+        "Telefoni nuk arriti ta hapë foton brenda 25 sekondave. Provo ta ruash si JPG."
+      );
       const canvas=document.createElement("canvas");
-      canvas.width=Math.max(1,Math.round(bitmap.width*scale));
-      canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+      canvas.width=Math.max(1,bitmap.width);
+      canvas.height=Math.max(1,bitmap.height);
       const ctx=canvas.getContext("2d");
       if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
       ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
       bitmap.close();bitmap=undefined;
       for(const dimension of [maxDimension,900,700,500]){
-        const s=Math.min(1,dimension/Math.max(canvas.width,canvas.height));
+        const scale=Math.min(1,dimension/Math.max(canvas.width,canvas.height));
         const output=document.createElement("canvas");
-        output.width=Math.max(1,Math.round(canvas.width*s));
-        output.height=Math.max(1,Math.round(canvas.height*s));
+        output.width=Math.max(1,Math.round(canvas.width*scale));
+        output.height=Math.max(1,Math.round(canvas.height*scale));
         const outCtx=output.getContext("2d");
         if(!outCtx)continue;
         outCtx.drawImage(canvas,0,0,output.width,output.height);
         for(const [type,qualities] of [["image/webp",[.78,.62,.48,.34]],["image/jpeg",[.7,.54,.4,.28]]] as [string,number[]][]){
           for(const quality of qualities){
-            const blob=await withTimeout(makeBlob(output,type,quality),20000,"Kompresimi i fotos zgjati shumë. Provo një foto tjetër.");
+            const blob=await withTimeout(
+              new Promise<Blob|null>(resolve=>output.toBlob(resolve,type,quality)),
+              10000,
+              "Kompresimi i fotos zgjati shumë. Provo një foto tjetër."
+            );
             if(blob&&blob.size>0&&blob.size<=maxBytes){
-              return new File([blob],"photo."+(type==="image/webp"?"webp":"jpg"),{type,lastModified:Date.now()});
+              return new File([blob],"photo."+(blob.type==="image/webp"?"webp":"jpg"),{type:blob.type||type,lastModified:Date.now()});
             }
           }
         }
       }
-      // If the quick path couldn't reach the size target, fall through to the
-      // compatibility path below.
-    }catch(fastError){
-      // Continue to the HEIC/native-image compatibility path below.
+      throw new Error("Fotoja nuk u zvogëlua dot nën 500 KB. Provo një foto tjetër.");
+    }catch(e:any){
+      if(e?.message)throw e;
+      throw new Error("Nuk arrita ta përpunoj foton. Provo ta ruash si JPG ose PNG.");
     }finally{
       try{bitmap?.close();}catch{}
     }
