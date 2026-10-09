@@ -36,7 +36,7 @@ async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Prom
   // Standard phone photos: decode directly to a small bitmap. Do not fall back
   // to decoding the original full-resolution image, which can freeze mobile
   // browsers and leave the progress indicator at 5%.
-  const isHeicFile=/\\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  const isHeicFile=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
   if(!isHeicFile){
     let bitmap:ImageBitmap|undefined;
     try{
