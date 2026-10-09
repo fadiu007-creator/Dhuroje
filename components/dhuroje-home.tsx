@@ -31,161 +31,18 @@ function safeFormData(form: HTMLFormElement): FormData{
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
 
 async function compressImage(file:File,maxDimension=1200,maxBytes=500*1024):Promise<File|null>{
+  // Reliability-first upload path: do not decode or transcode images in the
+  // mobile browser. Android camera JPEGs can stall the UI during decoding.
+  // Keep the original File intact and let XHR upload it with real progress.
+  void maxDimension;
+  void maxBytes;
+  if(!file || file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
-  const makeBlob=(canvas:HTMLCanvasElement,type:string,quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,type,quality));
-  // Standard phone photos: decode directly to a small bitmap. Do not fall back
-  // to decoding the original full-resolution image, which can freeze mobile
-  // browsers and leave the progress indicator at 5%.
-  const isHeicFile=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
-  if(!isHeicFile){
-    let bitmap:ImageBitmap|undefined;
-    try{
-      try{
-        bitmap=await withTimeout(
-          createImageBitmap(file,{resizeWidth:maxDimension,resizeHeight:maxDimension,resizeQuality:"high"}),
-          25000,
-          "Telefoni nuk arriti ta hapë foton brenda 25 sekondave."
-        );
-      }catch(firstDecodeError:any){
-        // Some Android galleries provide HEIC/HEIF photos with a generic MIME
-        // type and a .jpg-looking filename. Try converting once before failing.
-        try{
-          const mod=await import("heic2any");
-          const convert=(mod as any).default||mod;
-          const converted=await withTimeout(
-            Promise.resolve(convert({blob:file,toType:"image/jpeg",quality:.88})),
-            30000,
-            "Konvertimi i fotos zgjati shumë. Provo ta ruash si JPG."
-          );
-          const jpeg=Array.isArray(converted)?converted[0]:converted;
-          bitmap=await withTimeout(
-            createImageBitmap(jpeg,{resizeWidth:maxDimension,resizeHeight:maxDimension,resizeQuality:"high"}),
-            25000,
-            "Telefoni nuk arriti ta hapë foton edhe pas konvertimit."
-          );
-        }catch(conversionError:any){
-          // Last resort: don't block standard image uploads if this phone cannot decode for compression.
-          const standardImage = ["image/jpeg","image/jpg","image/png","image/webp","image/gif"].includes((file.type||"").toLowerCase()) || /\.(jpe?g|png|webp|gif)$/i.test(file.name);
-          if(standardImage) return file;
-          throw new Error("Nuk arrita ta lexoj foton ("+(file.type||"format i panjohur")+", "+Math.round(file.size/1024)+" KB). Provo ta zgjedhësh përsëri nga Galeria ose ruaje si JPG/PNG.");
-        }
-      }
-      const canvas=document.createElement("canvas");
-      canvas.width=Math.max(1,bitmap.width);
-      canvas.height=Math.max(1,bitmap.height);
-      const ctx=canvas.getContext("2d");
-      if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
-      ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
-      bitmap.close();bitmap=undefined;
-      for(const dimension of [maxDimension,900,700,500]){
-        const scale=Math.min(1,dimension/Math.max(canvas.width,canvas.height));
-        const output=document.createElement("canvas");
-        output.width=Math.max(1,Math.round(canvas.width*scale));
-        output.height=Math.max(1,Math.round(canvas.height*scale));
-        const outCtx=output.getContext("2d");
-        if(!outCtx)continue;
-        outCtx.drawImage(canvas,0,0,output.width,output.height);
-        for(const [type,qualities] of [["image/webp",[.78,.62,.48,.34]],["image/jpeg",[.7,.54,.4,.28]]] as [string,number[]][]){
-          for(const quality of qualities){
-            const blob=await withTimeout(
-              new Promise<Blob|null>(resolve=>output.toBlob(resolve,type,quality)),
-              10000,
-              "Kompresimi i fotos zgjati shumë. Provo një foto tjetër."
-            );
-            if(blob&&blob.size>0&&blob.size<=maxBytes){
-              return new File([blob],"photo."+(blob.type==="image/webp"?"webp":"jpg"),{type:blob.type||type,lastModified:Date.now()});
-            }
-          }
-        }
-      }
-      throw new Error("Fotoja nuk u zvogëlua dot nën 500 KB. Provo një foto tjetër.");
-    }catch(e:any){
-      if(e?.message)throw e;
-      throw new Error("Nuk arrita ta përpunoj foton. Provo ta ruash si JPG ose PNG.");
-    }finally{
-      try{bitmap?.close();}catch{}
-    }
-  }
-  const loadImage=(blob:Blob,timeoutMs=60000)=>withTimeout(new Promise<HTMLImageElement>((resolve,reject)=>{
-    const url=URL.createObjectURL(blob);
-    const img=new Image();
-    const cleanup=()=>URL.revokeObjectURL(url);
-    img.onload=()=>{cleanup();resolve(img);};
-    img.onerror=()=>{cleanup();reject(new Error("decode"));};
-    img.src=url;
-  }),timeoutMs,"Leximi i fotos po zgjat shumë. Provo përsëri.");
-  let source:Blob=file;
-  const isHeic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
-  const isLikelyImage=file.type.startsWith("image/")||isHeic||!file.type;
-  if(!isLikelyImage)throw new Error("Ky skedar nuk duket të jetë foto. Zgjidh një fotografi nga telefoni.");
-  if(isHeic){
-    try{
-      const mod=await import("heic2any");
-      const convert=(mod as any).default||mod;
-      const converted=await convert({blob:file,toType:"image/jpeg",quality:.9});
-      source=Array.isArray(converted)?converted[0]:converted;
-    }catch{
-      throw new Error("Telefoni nuk mundi ta konvertojë këtë foto HEIC/HEIF. Provo ta ndash foton nga Galeria si JPG.");
-    }
-  }
-  let image:HTMLImageElement;
-  try{
-    image=await loadImage(source,60000);
-  }catch{
-    // Browser-native decode failed; try the browser's built-in image decoder
-    // on common phone formats, then HEIC conversion as a last supported path.
-    try{
-      const bitmap=await withTimeout(createImageBitmap(source),60000,"Leximi i fotos po zgjat shumë.");
-      const canvas=document.createElement("canvas");
-      const scale=Math.min(1,maxDimension/Math.max(bitmap.width,bitmap.height));
-      canvas.width=Math.max(1,Math.round(bitmap.width*scale));
-      canvas.height=Math.max(1,Math.round(bitmap.height*scale));
-      const ctx=canvas.getContext("2d");
-      if(!ctx){bitmap.close();throw new Error("canvas");}
-      ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
-      let blob:Blob|null=null;
-      for(const q of [.82,.7,.58,.46,.34]){
-        blob=await makeBlob(canvas,"image/jpeg",q);
-        if(blob&&blob.size<=maxBytes)break;
-      }
-      if(!blob||blob.size>maxBytes)throw new Error("size");
-      return new File([blob],"photo.jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }catch(bitmapError:any){
-      // Last fallback: some phones expose HEIC/HEIF photos with a generic MIME type.
-      try{
-        const mod=await import("heic2any");
-        const convert=(mod as any).default||mod;
-        const converted=await convert({blob:file,toType:"image/jpeg",quality:.9});
-        source=Array.isArray(converted)?converted[0]:converted;
-        image=await loadImage(source,60000);
-      }catch(conversionError:any){
-        const format=file.type||"format i panjohur";
-        throw new Error("Nuk arrita ta përpunoj foton e zgjedhur ("+format+", "+Math.round(file.size/1024)+" KB). Provo një foto tjetër ose ruaje si JPG/PNG. "+(conversionError?.message||bitmapError?.message||"Formati nuk mbështetet."));
-      }
-    }
-  }
-  let blob:Blob|null=null;
-  for(const dimension of [maxDimension,1000,800,640,480]){
-    const scale=Math.min(1,dimension/Math.max(image.naturalWidth,image.naturalHeight));
-    const canvas=document.createElement("canvas");
-    canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
-    canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
-    const ctx=canvas.getContext("2d");
-    if(!ctx)throw new Error("Nuk mund të përpunohej fotoja.");
-    ctx.drawImage(image,0,0,canvas.width,canvas.height);
-    for(const type of ["image/webp","image/jpeg"]){
-      const qualities=type==="image/webp"?[.84,.74,.64,.54,.44,.34]:[.76,.64,.52,.4,.3];
-      for(const quality of qualities){
-        blob=await makeBlob(canvas,type,quality);
-        if(blob&&blob.size<=maxBytes)break;
-      }
-      if(blob&&blob.size<=maxBytes)break;
-    }
-    if(blob&&blob.size<=maxBytes)break;
-  }
-  if(!blob||blob.size>maxBytes)throw new Error("Fotoja nuk mund të kompresohej. Provo një foto tjetër.");
-  const type=blob.type||"image/jpeg";
-  return new File([blob],"photo."+(type==="image/webp"?"webp":"jpg"),{type,lastModified:Date.now()});
+  const heic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
+  const supported=/^image\/(jpeg|jpg|png|webp|gif|avif)$/i.test(file.type)||/\.(jpe?g|png|webp|gif|avif)$/i.test(file.name);
+  if(heic)throw new Error("Ky telefon jep foton në format HEIC. Zgjidhe si JPG nga Galeria që të mund të ngarkohet.");
+  if(!supported)throw new Error("Zgjidh një foto JPG, PNG, WebP ose GIF.");
+  return file;
 }
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -479,7 +336,7 @@ export default function DhurojeHome(){
         );
         if(!compressed)throw new Error("Fotoja "+(i+1)+" nuk mund të përpunohej.");
         setUploadProgress(Math.max(8,Math.round(((i+0.05)/totalFiles)*90)));
-        const ext=compressed.type==="image/webp"?"webp":"jpg";
+        const ext=compressed.type==="image/webp"?"webp":compressed.type==="image/png"?"png":compressed.type==="image/gif"?"gif":compressed.type==="image/avif"?"avif":"jpg";
         const path=postingUser.id+"/"+itemId+"/"+i+"-"+crypto.randomUUID()+"."+ext;
         setUploadStage("Po ngarkohet fotoja "+(i+1)+" nga "+totalFiles+"…");
         const up=await uploadDhurojePhoto(path,compressed,(loaded,total)=>{
