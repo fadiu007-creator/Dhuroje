@@ -34,8 +34,8 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
   if(!file || file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
   const isHeic=/\.(heic|heif|heics|heifs)$/i.test(file.name)||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type);
-  const supported=/^image\/(jpeg|jpg|png|webp|gif|avif|heic|heif)$/i.test(file.type)||/\.(jpe?g|png|webp|gif|avif|heic|heif)$/i.test(file.name);
-  if(!supported)throw new Error("Zgjidh një foto JPG, PNG, WebP, GIF ose HEIC.");
+  const supported=/^image\/(jpeg|jpg|png|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(file.type)||/\.(jpe?g|png|webp|gif|avif|heic|heif|bmp|tiff?)$/i.test(file.name);
+  if(!supported && file.type && !file.type.startsWith("image/"))throw new Error("Zgjidh një skedar fotografie nga Galeria.");
 
   let source:Blob=file;
   let sourceName=file.name||"foto";
@@ -46,26 +46,45 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       source=Array.isArray(converted)?converted[0]:converted;
       sourceName=sourceName.replace(/\.(heic|heif|heics|heifs)$/i,"")+".jpg";
     }catch{
-      throw new Error("Kjo foto është HEIC dhe telefoni nuk arriti ta konvertojë. Hape foton në Galeri dhe ruaje si JPG.");
+      throw new Error("Kjo foto është HEIC dhe nuk u konvertua. Provo ta zgjedhësh përsëri nga Galeria.");
     }
   }
 
   let bitmap:ImageBitmap|undefined;
   let image:HTMLImageElement|undefined;
   let objectUrl:string|undefined;
-  try{
-    // Prefer native Blob decoding: it avoids FileReader/data-URL failures seen on some Android devices.
+  const decode = async (blob:Blob):Promise<{bitmap?:ImageBitmap;image?:HTMLImageElement;url?:string}> => {
     if(typeof createImageBitmap==="function"){
-      try{bitmap=await createImageBitmap(source);}catch{/* Try the browser image decoder below. */}
+      try{return {bitmap:await createImageBitmap(blob)};}catch{/* Use image element fallback. */}
     }
-    if(!bitmap){
-      objectUrl=URL.createObjectURL(source);
-      image=await new Promise<HTMLImageElement>((resolve,reject)=>{
-        const img=new Image();
-        img.onload=()=>img.naturalWidth&&img.naturalHeight?resolve(img):reject(new Error("Përmasat e fotos nuk vlejnë."));
-        img.onerror=()=>reject(new Error("Shfletuesi nuk e mbështet formatin e kësaj fotoje. Provo ta ruash si JPG."));
-        img.src=objectUrl!;
+    const url=URL.createObjectURL(blob);
+    try{
+      const img=await new Promise<HTMLImageElement>((resolve,reject)=>{
+        const el=new Image();
+        el.onload=()=>el.naturalWidth>0&&el.naturalHeight>0?resolve(el):reject(new Error("Përmasat e fotos nuk vlejnë."));
+        el.onerror=()=>reject(new Error("Dekodimi i fotos dështoi."));
+        el.src=url;
       });
+      return {image:img,url};
+    }catch(error){URL.revokeObjectURL(url);throw error;}
+  };
+  try{
+    try{
+      const decoded=await decode(source);
+      bitmap=decoded.bitmap;image=decoded.image;objectUrl=decoded.url;
+    }catch(firstError){
+      // Some Android gallery providers label HEIC/HEIF photos as JPEG or omit the extension.
+      // Try conversion once even when the filename/MIME type did not identify HEIC.
+      try{
+        const mod=await import("heic2any");
+        const converted=await mod.default({blob:source,toType:"image/jpeg",quality:0.85});
+        source=Array.isArray(converted)?converted[0]:converted;
+        sourceName=sourceName.replace(/\.[^.]+$/,"")+".jpg";
+        const decoded=await decode(source);
+        bitmap=decoded.bitmap;image=decoded.image;objectUrl=decoded.url;
+      }catch{
+        throw new Error("Nuk arrita ta hap këtë format fotografie në telefon. Në Galeri zgjidh Ndaj ose Ruaj si dhe provo JPG.");
+      }
     }
     const drawable:CanvasImageSource=(bitmap||image)!;
     const originalWidth=bitmap?.width||image!.naturalWidth;
@@ -79,7 +98,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
       const ctx=canvas.getContext("2d");
       if(!ctx){reject(new Error("Telefoni nuk mundi ta përgatisë foton."));return;}
       ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
-      try{ctx.drawImage(drawable,0,0,w,h);}catch{reject(new Error("Nuk arrita ta përgatis foton. Provo ta ruash si JPG."));return;}
+      try{ctx.drawImage(drawable,0,0,w,h);}catch{reject(new Error("Nuk arrita ta përgatis foton."));return;}
       canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Kompresimi i fotos dështoi.")),"image/jpeg",quality);
     });
     let blob=await encode(width,height,0.82);
@@ -98,8 +117,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
     const base=(sourceName.replace(/\.[^.]+$/,"")||"foto").replace(/[^a-zA-Z0-9_-]/g,"-");
     return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
   }catch(error){
-    if(error instanceof Error&&/Kjo foto është HEIC/.test(error.message))throw error;
-    throw new Error(error instanceof Error?error.message:"Nuk arrita ta përgatis foton. Provo një foto JPG ose PNG.");
+    throw new Error(error instanceof Error?error.message:"Nuk arrita ta përgatis foton. Provo një foto tjetër.");
   }finally{
     bitmap?.close();
     if(objectUrl)URL.revokeObjectURL(objectUrl);
