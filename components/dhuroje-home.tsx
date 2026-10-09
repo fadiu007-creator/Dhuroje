@@ -205,6 +205,30 @@ async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes
   }
 }
 
+async function rotatePhotoFile(file:File,degrees:number):Promise<File>{
+  const sourceUrl=URL.createObjectURL(file);
+  try{
+    const image=await new Promise<HTMLImageElement>((resolve,reject)=>{
+      const img=new Image();
+      img.onload=()=>resolve(img);
+      img.onerror=()=>reject(new Error("Fotoja nuk mund të hapej për rrotullim."));
+      img.src=sourceUrl;
+    });
+    const normalized=((degrees%360)+360)%360;
+    const swap=normalized===90||normalized===270;
+    const canvas=document.createElement("canvas");
+    canvas.width=swap?image.naturalHeight:image.naturalWidth;
+    canvas.height=swap?image.naturalWidth:image.naturalHeight;
+    const ctx=canvas.getContext("2d");
+    if(!ctx)throw new Error("Nuk mund të përgatitej rrotullimi i fotos.");
+    ctx.translate(canvas.width/2,canvas.height/2);
+    ctx.rotate(normalized*Math.PI/180);
+    ctx.drawImage(image,-image.naturalWidth/2,-image.naturalHeight/2);
+    const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Rrotullimi i fotos dështoi.")),"image/jpeg",0.92));
+    return new File([blob],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+  }finally{URL.revokeObjectURL(sourceUrl);}
+}
+
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -966,6 +990,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [photos,setPhotos]=useState<any[]>([]);
+  const [photoRotations,setPhotoRotations]=useState<Record<string,number>>({});
   const [newFiles,setNewFiles]=useState<File[]>([]);
   const [removePhotoIds,setRemovePhotoIds]=useState<string[]>([]);
   const [locationName,setLocationName]=useState(listing.location_name||"");
@@ -1007,6 +1032,29 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
       await supabase.storage.from("dhuroje-listings").remove(removeRows.map(x=>x.storage_path));
     }
     const remaining=photos.filter(x=>!removePhotoIds.includes(x.id));
+    for(const photo of remaining){
+      const degrees=((photoRotations[photo.id]||0)%360+360)%360;
+      if(!degrees)continue;
+      try{
+        const response=await fetch(photo.url);
+        if(!response.ok)throw new Error("Nuk u shkarkua fotoja për rrotullim.");
+        const sourceBlob=await response.blob();
+        const sourceFile=new File([sourceBlob],"foto.jpg",{type:sourceBlob.type||"image/jpeg"});
+        const rotated=await compressPhotoWithFallback(await rotatePhotoFile(sourceFile,degrees),1200,500*1024);
+        const path=listing.owner_id+"/"+listing.id+"/rotated-"+crypto.randomUUID()+".jpg";
+        const up=await uploadDhurojePhoto(path,rotated);
+        if(up.error)throw new Error(up.error.message||"Fotoja e rrotulluar nuk u ngarkua.");
+        const updated=await supabase.from("dhuroje_listing_images").update({storage_path:path}).eq("id",photo.id).eq("listing_id",listing.id);
+        if(updated.error){
+          await supabase.storage.from("dhuroje-listings").remove([path]);
+          throw new Error(updated.error.message||"Nuk u ruajt rrotullimi i fotos.");
+        }
+        await supabase.storage.from("dhuroje-listings").remove([photo.storage_path]);
+      }catch(rotationError:any){
+        setError("Nuk u ruajt rrotullimi i fotos: "+(rotationError?.message||"Provo përsëri."));
+        setSaving(false);return;
+      }
+    }
     for(let i=0;i<Math.min(newFiles.length,6);i++){
       const file=await compressPhotoWithFallback(newFiles[i],1200,500*1024);
       const path=listing.owner_id+"/"+listing.id+"/"+(remaining.length+i)+"-"+crypto.randomUUID()+".jpg";
@@ -1029,7 +1077,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     <label>Qyteti<select name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
     {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
-    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" /><button type="button" onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button></div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={async e=>{const input=e.currentTarget;const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);const compressed:File[]=[];const failed:string[]=[];setError("");try{for(const file of files){try{compressed.push(await compressPhotoWithFallback(file,1200,500*1024));}catch(_err){failed.push(file.name||"Foto");}}setNewFiles(compressed);if(failed.length)setError((compressed.length?"Disa foto u shtuan; këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Provo t'i ruash si JPG.");else if(files.length&&!compressed.length)setError("Nuk u zgjodh asnjë foto e vlefshme.");}finally{input.value="";}}}/></label></div>
+    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" style={{transform:"rotate("+(((photoRotations[p.id]||0)%360+360)%360)+"deg)"}} /><button type="button" aria-label={removePhotoIds.includes(p.id)?"Rikthe foton":"Hiq foton"} onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button>{!removePhotoIds.includes(p.id)&&<div style={{display:"flex",gap:4,position:"absolute",left:4,bottom:4}}><button type="button" aria-label="Rrotullo majtas" title="Rrotullo majtas" onClick={()=>setPhotoRotations(r=>({...r,[p.id]:((r[p.id]||0)+270)%360}))} style={{position:"static",width:30,height:30,borderRadius:8,background:"rgba(0,0,0,.72)",color:"#fff",border:0}}>↶</button><button type="button" aria-label="Rrotullo djathtas" title="Rrotullo djathtas" onClick={()=>setPhotoRotations(r=>({...r,[p.id]:((r[p.id]||0)+90)%360}))} style={{position:"static",width:30,height:30,borderRadius:8,background:"rgba(0,0,0,.72)",color:"#fff",border:0}}>↷</button></div>}</div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={async e=>{const input=e.currentTarget;const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);const compressed:File[]=[];const failed:string[]=[];setError("");try{for(const file of files){try{compressed.push(await compressPhotoWithFallback(file,1200,500*1024));}catch(_err){failed.push(file.name||"Foto");}}setNewFiles(compressed);if(failed.length)setError((compressed.length?"Disa foto u shtuan; këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Provo t'i ruash si JPG.");else if(files.length&&!compressed.length)setError("Nuk u zgjodh asnjë foto e vlefshme.");}finally{input.value="";}}}/></label></div>
     <button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj ndryshimet"}</button>
   </form></div>;
 }
