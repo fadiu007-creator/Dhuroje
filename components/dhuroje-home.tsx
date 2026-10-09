@@ -85,13 +85,27 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
           image!.src=objectUrl!;
         });
       }catch(_blobDecodeError){
-        const dataUrl=await new Promise<string>((resolve,reject)=>{
-          const reader=new FileReader();
-          reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari nuk u lexua nga galeria."));
-          reader.onerror=()=>reject(new Error("Galeria nuk lejoi leximin e skedarit."));
-          reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
-          reader.readAsDataURL(source);
-        });
+        let dataUrl="";
+        try{
+          // Prefer the File/Blob byte API: Android content providers sometimes
+          // reject FileReader even though the selected file is still readable.
+          const bytes=new Uint8Array(await source.arrayBuffer());
+          let binary="";
+          const chunkSize=0x8000;
+          for(let offset=0;offset<bytes.length;offset+=chunkSize){
+            binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length)));
+          }
+          const mime=source.type||file.type||"application/octet-stream";
+          dataUrl="data:"+mime+";base64,"+btoa(binary);
+        }catch(_arrayBufferError){
+          dataUrl=await new Promise<string>((resolve,reject)=>{
+            const reader=new FileReader();
+            reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari u zgjodh, por telefoni nuk lejoi leximin e bajteve. Zgjidhe përsëri nga Galeria ose ruaje si JPG në pajisje."));
+            reader.onerror=()=>reject(new Error("Telefoni nuk lejoi leximin e skedarit. Provo ta ruash foton lokalisht si JPG dhe zgjidhe përsëri."));
+            reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
+            reader.readAsDataURL(source);
+          });
+        }
         image=new Image();
         await new Promise<void>((resolve,reject)=>{
           image!.onload=()=>resolve();
@@ -806,7 +820,7 @@ export default function DhurojeHome(){
     {showGive&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card listing-form-card" onSubmit={createListing}><div className="request-form-head"><div><p className="eyebrow">DHUROJE</p><h2>Çfarë dëshiron të dhurosh?</h2><span>Publiko diçka që nuk e përdor më dhe mund t’i nevojitet dikujt.</span></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       {postingCategory!=="Ushqim"&&<label>Gjendja e objektit<select name="condition" defaultValue="good" required><option value="new">Si i ri</option><option value="good">Në gjendje të mirë</option><option value="worn">I përdorur</option><option value="broken">I dëmtuar</option></select></label>}
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*,.heic,.heif" multiple onChange={e=>{const input=e.currentTarget;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){setPhotoError(false);setError("");const next=[...selectedPhotoFiles,...files].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));}input.value="";}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto.</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input name="photos" type="file" accept="image/*,.heic,.heif" multiple onChange={async e=>{const input=e.currentTarget;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,6-selectedPhotoFiles.length);if(files.length){setPhotoError(false);setError("");try{setUploadStage("Po përgatiten fotot…");const copied:File[]=[];for(const file of files){const bytes=await file.arrayBuffer();copied.push(new File([bytes],file.name||"foto", {type:file.type||"application/octet-stream",lastModified:file.lastModified||Date.now()}));}const next=[...selectedPhotoFiles,...copied].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));}catch(err:any){setError("Telefoni nuk lejoi kopjimin e fotos. Hape foton në Galeri, ruaje në pajisje dhe provo përsëri. "+(err?.message||""));}}input.value="";}}/></label>{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">Minimum 1, maksimum 6 foto.</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
 {posting&&<div className="photo-upload-progress" role="status" aria-live="polite" style={{margin:"14px 0",padding:"12px",border:"1px solid #dce8df",borderRadius:"12px",background:"#f7fbf8"}}><div style={{display:"flex",justifyContent:"space-between",gap:"12px",marginBottom:"8px",fontSize:"14px",fontWeight:600}}><span>{uploadStage||"Po ngarkohet…"}</span><span>{uploadProgress}%</span></div><div role="progressbar" aria-label="Përparimi i ngarkimit të fotove" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress} style={{height:"8px",width:"100%",background:"#dfe8e1",borderRadius:"999px",overflow:"hidden"}}><div style={{height:"100%",width:uploadProgress+"%",background:"#23864b",borderRadius:"999px",transition:"width 160ms ease"}} /></div><small style={{display:"block",marginTop:"7px",color:"#52645a"}}>Mos e mbyll këtë faqe derisa të përfundojë ngarkimi.</small></div>}<button className="primary full" type="submit" disabled={posting||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
