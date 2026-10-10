@@ -30,289 +30,93 @@ function safeFormData(form: HTMLFormElement): FormData{
 
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
 
-async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Promise<File>{
+// ---- Photo preparation -------------------------------------------------------
+// Simple pipeline: decode -> resize on a canvas -> JPEG under the size cap.
+// If the browser cannot decode the picked file (some Android gallery providers),
+// a JPEG/PNG/WebP that already fits the 5 MB bucket limit is uploaded as-is:
+// the upload reads it through the network stack, which works when FileReader does not.
+const PHOTO_BUCKET_LIMIT=5*1024*1024;
+const PHOTO_UPLOAD_TYPES=["image/jpeg","image/png","image/webp"];
+
+function toJpegFile(blob:Blob,originalName:string):File{
+  return new File([blob],(originalName.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+}
+
+type DecodedImage={source:CanvasImageSource;width:number;height:number;release:()=>void};
+
+async function decodeImage(blob:Blob):Promise<DecodedImage>{
+  if(typeof createImageBitmap==="function"){
+    try{
+      const bitmap=await createImageBitmap(blob);
+      return {source:bitmap,width:bitmap.width,height:bitmap.height,release:()=>bitmap.close()};
+    }catch(_bitmapError){}
+  }
+  const url=URL.createObjectURL(blob);
+  try{
+    const img=new Image();
+    await new Promise<void>((resolve,reject)=>{
+      img.onload=()=>resolve();
+      img.onerror=()=>reject(new Error("decode failed"));
+      img.src=url;
+    });
+    return {source:img,width:img.naturalWidth,height:img.naturalHeight,release:()=>URL.revokeObjectURL(url)};
+  }catch(error){
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+}
+
+function looksLikeHeic(file:File):boolean{
+  return /\.(heic|heif)$/i.test(file.name)||/image\/(heic|heif)/i.test(file.type);
+}
+
+async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes=500*1024):Promise<File>{
   if(!file||file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
 
   let source:Blob=file;
-  const ext=file.name.split(".").pop()?.toLowerCase()||"";
-  let signature="";
-  try{
-    // Android's photo picker can give HEIC files a generic name or MIME type.
-    // Detect the actual container signature instead of relying on file.name/type.
-    const header=new Uint8Array(await file.slice(0,32).arrayBuffer());
-    signature=String.fromCharCode(...header);
-  }catch(_error){}
-  const heicBrand=/ftyp(heic|heix|hevc|hevx|heim|heis|heif|mif1|msf1)/i.test(signature);
-  const isHeic=/^(heic|heif|heics|heifs)$/.test(ext)
-    ||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type)
-    ||heicBrand;
-
-  // Android photo providers sometimes return valid image bytes with an empty
-  // or generic MIME type. Sniff the header so the browser decodes the right format.
-  const headerBytes=new Uint8Array(await file.slice(0,32).arrayBuffer().catch(()=>new ArrayBuffer(0)));
-  const headerText=String.fromCharCode(...headerBytes);
-  let detectedMime="";
-  if(headerBytes[0]===0xff&&headerBytes[1]===0xd8&&headerBytes[2]===0xff)detectedMime="image/jpeg";
-  else if(headerText.startsWith("\x89PNG\r\n\x1a\n"))detectedMime="image/png";
-  else if(headerText.startsWith("GIF87a")||headerText.startsWith("GIF89a"))detectedMime="image/gif";
-  else if(headerText.startsWith("RIFF")&&headerText.slice(8,12)==="WEBP")detectedMime="image/webp";
-  else if(headerText.slice(4,12).includes("ftypavif")||headerText.slice(4,12).includes("ftypavis"))detectedMime="image/avif";
-  else if(heicBrand)detectedMime="image/heic";
-
-  // Fast path for a valid, already-small JPEG: this file is already below the
-  // requested storage limit, so do not force it through browser decoders that can
-  // fail on picker-backed files. The JPEG signature was verified from its header.
-  // This is not an oversized-original fallback: it is already within maxBytes.
-  if(detectedMime==="image/jpeg"&&file.size<=700*1024){
-    // Keep already-small JPEGs out of the browser decoding pipeline. This is
-    // still within the hard 700 KB storage cap, and avoids false failures from
-    // gallery-backed File objects that cannot be decoded by canvas/FileReader.
-    // Preserve the original bytes only when the JPEG is already under the cap.
-    const bytes=await file.arrayBuffer();
-    if(bytes.byteLength!==file.size)throw new Error("Skedari JPEG u lexua pjesërisht. Zgjidhe përsëri nga memoria e telefonit.");
-    return new File([bytes],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:file.lastModified||Date.now()});
-  }
-
-  // Keep standard browser-supported image files attached to their original
-  // File/Blob. On Android, copying a picker-backed File through stream() can
-  // produce bytes that the browser image decoder cannot decode, even though the
-  // original file can be displayed directly through an object URL.
-  const standardImageFormat=detectedMime==="image/jpeg"||detectedMime==="image/png"||detectedMime==="image/webp"||detectedMime==="image/gif";
-  // Snapshot only unknown/generic formats; don't rewrite standard image bytes.
-  try{
-    if(!standardImageFormat){
-    let snapshot:Uint8Array|null=null;
-    if(typeof file.stream==="function"){
-      try{
-        const reader=file.stream().getReader();
-        const chunks:Uint8Array[]=[];
-        let total=0;
-        while(true){
-          const part=await reader.read();
-          if(part.done)break;
-          if(part.value){chunks.push(part.value);total+=part.value.length;}
-          if(total>50*1024*1024)throw new Error("Fotoja është më e madhe se 50 MB.");
-        }
-        if(total){snapshot=new Uint8Array(total);let offset=0;for(const chunk of chunks){snapshot.set(chunk,offset);offset+=chunk.length;}}
-      }catch(_streamReadError){snapshot=null;}
-    }
-    if(!snapshot){
-      try{const buffer=await file.arrayBuffer();if(buffer.byteLength)snapshot=new Uint8Array(buffer);}catch(_arrayBufferReadError){}
-    }
-    if(snapshot){
-      const mime=detectedMime||file.type||"application/octet-stream";
-      source=new Blob([snapshot.buffer.slice(snapshot.byteOffset,snapshot.byteOffset+snapshot.byteLength) as ArrayBuffer],{type:mime});
-    }
-    }
-  }catch(_snapshotError){}
-
-  if(isHeic){
+  if(looksLikeHeic(file)){
     try{
       const heic=await import("heic2any");
       const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
       source=Array.isArray(converted)?converted[0]:converted;
-      if(!(source instanceof Blob)||source.size===0)throw new Error("Konvertimi nuk prodhoi foto.");
-    }catch(_heicConversionError){
-      // Some valid HEIF variants are natively decodable on newer Android
-      // browsers but are not supported by heic2any. Try native decoding too.
-      source=detectedMime?new Blob([file],{type:detectedMime}):file;
-    }
-  }else if((!source.type||source.type==="application/octet-stream")&&detectedMime){
-    source=new Blob([file],{type:detectedMime});
+    }catch(_heicError){}
   }
-  // Decode the selected Blob directly. Avoid Compressor.js and browser-image-compression:
-  // both depend on FileReader paths that fail for some Android gallery/provider files.
-  let bitmap:ImageBitmap|null=null;
-  let image:HTMLImageElement|null=null;
-  let objectUrl:string|null=null;
-  let width=0,height=0;
+
+  let decoded:DecodedImage;
   try{
-    if(typeof createImageBitmap==="function"){
-      try{
-        bitmap=await createImageBitmap(source);
-        width=bitmap.width;height=bitmap.height;
-      }catch(_error){
-        bitmap=null;
-      }
-    }
-    if(!bitmap){
-      // Some Android gallery providers expose a temporary Blob URL that fails
-      // to decode, while a data URL from the same bytes works. Try both paths.
-      image=new Image();
-      try{
-        objectUrl=URL.createObjectURL(source);
-        await new Promise<void>((resolve,reject)=>{
-          image!.onload=()=>resolve();
-          image!.onerror=()=>reject(new Error("Blob URL decode failed"));
-          image!.src=objectUrl!;
-        });
-      }catch(_blobDecodeError){
-        let dataUrl="";
-        // Try independent browser paths before declaring an Android provider
-          // file unreadable. Some picker-backed Blobs reject arrayBuffer(), while
-          // the Blob slice or its temporary object URL can still yield the bytes.
-          let bytes:Uint8Array|null=null;
-          try{bytes=new Uint8Array(await source.arrayBuffer());}catch(_directReadError){}
-          if(!bytes){
-            try{bytes=new Uint8Array(await source.slice(0,source.size,source.type).arrayBuffer());}catch(_sliceReadError){}
-          }
-          if(!bytes&&objectUrl){
-            try{
-              const response=await fetch(objectUrl);
-              if(response.ok)bytes=new Uint8Array(await response.arrayBuffer());
-            }catch(_urlReadError){}
-          }
-          if(!bytes){
-            // Retry against the original File object. Some browser picker providers
-            // expose a readable File but fail after it is wrapped in a Blob.
-            try{bytes=new Uint8Array(await file.arrayBuffer());}catch(_originalReadError){}
-          }
-          if(!bytes){
-            try{bytes=await new Promise<Uint8Array>((resolve,reject)=>{
-              const reader=new FileReader();
-              reader.onload=()=>reader.result instanceof ArrayBuffer?resolve(new Uint8Array(reader.result)):reject(new Error("Leximi i bajteve dështoi."));
-              reader.onerror=()=>reject(new Error("Leximi i skedarit origjinal dështoi."));
-              reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
-              reader.readAsArrayBuffer(file);
-            });}catch(_originalReaderError){}
-          }
-          if(bytes){
-            let binary="";
-            const chunkSize=0x8000;
-            for(let offset=0;offset<bytes.length;offset+=chunkSize){
-              binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length)));
-            }
-            const mime=source.type&&source.type!=="application/octet-stream"
-              ?source.type
-              :(detectedMime||file.type||"image/jpeg");
-            dataUrl="data:"+mime+";base64,"+btoa(binary);
-          }else{
-            // Last resort: read the original picker File directly as a data URL,
-            // not the derived Blob. This covers providers that reject Blob reads.
-            dataUrl=await new Promise<string>((resolve,reject)=>{
-              const reader=new FileReader();
-              reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari u zgjodh, por telefoni nuk lejoi leximin e bajteve."));
-              reader.onerror=()=>reject(new Error("Telefoni/galeria nuk lejoi leximin e kësaj fotoje. Shkarkoje ose ruaje lokalisht nga Galeria dhe provo përsëri."));
-              reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
-              reader.readAsDataURL(file);
-            });
-          }
-        image=new Image();
-        await new Promise<void>((resolve,reject)=>{
-          image!.onload=()=>resolve();
-          image!.onerror=()=>reject(new Error("Shfletuesi nuk e hapi foton. Format="+(detectedMime||file.type||"i panjohur")+", madhësia="+Math.round(file.size/1024)+" KB, header="+Array.from(headerBytes.slice(0,12)).map(b=>b.toString(16).padStart(2,"0")).join("")+". Provo ta shkarkosh foton në telefon dhe zgjidhe nga skedarët lokalë."));
-          image!.src=dataUrl;
-        });
-      }
-      width=image.naturalWidth;height=image.naturalHeight;
-    }
-    if(!width||!height)throw new Error("Fotoja nuk ka përmasa të vlefshme.");
-    // An already-small JPEG is already in the storage format: keep its bytes
-    // instead of degrading it by encoding it a second time.
-    if(detectedMime==="image/jpeg"&&source.size<=maxBytes&&width<=maxDimension&&height<=maxDimension){
-      return new File([source],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }
-    const scale=Math.min(1,maxDimension/Math.max(width,height));
-    let outWidth=Math.max(1,Math.round(width*scale));
-    let outHeight=Math.max(1,Math.round(height*scale));
+    decoded=await decodeImage(source);
+  }catch(_decodeError){
+    const type=file.type||"";
+    if(PHOTO_UPLOAD_TYPES.includes(type)&&file.size<=PHOTO_BUCKET_LIMIT)return file;
+    throw new Error("Shfletuesi nuk e hapi foton. Provo një foto tjetër ose ruaje si JPG.");
+  }
+
+  try{
+    if(!decoded.width||!decoded.height)throw new Error("Fotoja nuk ka përmasa të vlefshme.");
+    let scale=Math.min(1,maxDimension/Math.max(decoded.width,decoded.height));
     const canvas=document.createElement("canvas");
-    const context=canvas.getContext("2d");
-    if(!context)throw new Error("Shfletuesi nuk mbështet përpunimin e fotos.");
-    const draw=()=>{
-      canvas.width=outWidth;canvas.height=outHeight;
-      const ctx=canvas.getContext("2d");
-      if(!ctx)throw new Error("Nuk u krijua kanavaca e fotos.");
-      ctx.fillStyle="#ffffff";ctx.fillRect(0,0,outWidth,outHeight);
-      if(bitmap)ctx.drawImage(bitmap,0,0,outWidth,outHeight);
-      else if(image)ctx.drawImage(image,0,0,outWidth,outHeight);
-    };
-    const toJpeg=(quality:number)=>new Promise<Blob>((resolve,reject)=>{
-      canvas.toBlob(blob=>blob&&blob.size>0?resolve(blob):reject(new Error("Shfletuesi nuk krijoi foton JPEG.")),"image/jpeg",quality);
-    });
-    let output:Blob|null=null;
-    // Continue reducing both quality and dimensions for difficult high-resolution photos.
-    for(let resize=0;resize<10;resize++){
-      draw();
-      for(const quality of [0.82,0.72,0.62,0.52,0.42,0.32,0.25]){
-        const blob=await toJpeg(quality);
-        if(!output||blob.size<output.size)output=blob;
-        if(blob.size<=maxBytes){
-          return new File([blob],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-        }
+    const ctx=canvas.getContext("2d");
+    if(!ctx)throw new Error("Shfletuesi nuk mbështet përpunimin e fotos.");
+    let best:Blob|null=null;
+    for(let attempt=0;attempt<8;attempt++){
+      canvas.width=Math.max(1,Math.round(decoded.width*scale));
+      canvas.height=Math.max(1,Math.round(decoded.height*scale));
+      ctx.fillStyle="#ffffff";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(decoded.source,0,0,canvas.width,canvas.height);
+      for(const quality of [0.85,0.72,0.6,0.48,0.36]){
+        const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
+        if(!blob||blob.size===0)continue;
+        if(!best||blob.size<best.size)best=blob;
+        if(blob.size<=targetBytes)return toJpegFile(blob,file.name);
       }
-      outWidth=Math.max(1,Math.round(outWidth*0.78));
-      outHeight=Math.max(1,Math.round(outHeight*0.78));
+      scale*=0.8;
     }
-    if(output&&output.size<=maxBytes)return new File([output],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    throw new Error("Fotoja nuk u zvogëlua nën "+Math.round(maxBytes/1024)+" KB. Provo një foto me rezolucion më të ulët.");
-  }catch(error:any){
-    throw new Error("Fotoja nuk mund të lexohej ose përpunohej. "+(error?.message||String(error)||"Provo të zgjedhësh foton përsëri."));
+    if(best&&best.size<=PHOTO_BUCKET_LIMIT)return toJpegFile(best,file.name);
+    throw new Error("Fotoja është shumë e madhe. Provo një foto me rezolucion më të ulët.");
   }finally{
-    if(bitmap)bitmap.close();
-    if(objectUrl)URL.revokeObjectURL(objectUrl);
-  }
-}
-// Alternate browser encoders are used only when our primary decoder fails.
-// They run on the main thread for Android compatibility and never upload the original.
-async function compressWithLibraryFallback(file:File,maxDimension:number,maxBytes:number):Promise<File>{
-  const errors:string[]=[];
-  try{
-    const module=await import("browser-image-compression");
-    const result=await module.default(file,{
-      maxSizeMB:maxBytes/(1024*1024),
-      maxWidthOrHeight:maxDimension,
-      useWebWorker:false,
-      fileType:"image/jpeg",
-      initialQuality:0.82
-    });
-    if(result&&result.size>0&&result.size<=maxBytes){
-      return new File([result],(file.name.replace(/\\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }
-    errors.push("browser-image-compression nuk arriti madhësinë e kërkuar");
-  }catch(error:any){errors.push("browser-image-compression: "+String(error?.message||error||"dështoi"));}
-  try{
-    const module=await import("compressorjs");
-    const result=await new Promise<Blob>((resolve,reject)=>{
-      new module.default(file,{
-        quality:0.82,
-        maxWidth:maxDimension,
-        maxHeight:maxDimension,
-        mimeType:"image/jpeg",
-        convertSize:0,
-        success(blob:Blob){resolve(blob);},
-        error(error:Error){reject(error);}
-      });
-    });
-    if(result.size>0&&result.size<=maxBytes){
-      return new File([result],(file.name.replace(/\\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }
-    errors.push("compressorjs nuk arriti madhësinë e kërkuar");
-  }catch(error:any){errors.push("compressorjs: "+String(error?.message||error||"dështoi"));}
-  throw new Error(errors.join("; ")||"Nuk u gjet mënyrë alternative për përpunimin e fotos.");
-}
-// Aim for 500 KB, allowing up to 700 KB only when needed. Never upload the
-// untouched original as a fallback. Try independent encoders for difficult Android files.
-async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes=500*1024):Promise<File>{
-  let firstError:any=null;
-  try{
-    return await compressImage(file,maxDimension,targetBytes);
-  }catch(error:any){firstError=error;}
-  const firstMessage=String(firstError?.message||firstError||"");
-  const sizeLimitFailure=firstMessage.includes("nën")&&firstMessage.includes("KB");
-  if(sizeLimitFailure&&targetBytes<700*1024){
-    try{return await compressImage(file,maxDimension,700*1024);}catch(error:any){firstError=error;}
-  }
-  try{
-    return await compressWithLibraryFallback(file,maxDimension,targetBytes);
-  }catch(error:any){
-    const alternateError=error;
-    if(targetBytes<700*1024){
-      try{return await compressWithLibraryFallback(file,maxDimension,700*1024);}catch(error700:any){
-        throw new Error("Përpunimi dështoi. Metoda kryesore: "+String(firstError?.message||firstError||"gabim i panjohur")+". Metodat rezervë: "+String(alternateError?.message||alternateError||"gabim i panjohur")+"; "+String(error700?.message||error700||"gabim i panjohur"));
-      }
-    }
-    throw new Error("Përpunimi dështoi. "+String(firstError?.message||firstError||"gabim i panjohur")+"; "+String(alternateError?.message||alternateError||"gabim i panjohur"));
+    decoded.release();
   }
 }
 
@@ -374,7 +178,7 @@ async function uploadDhurojePhoto(path:string,file:File,onProgress?:(loaded:numb
     const {data:{session},error:sessionError}=await supabase.auth.getSession();
     if(sessionError||!session?.access_token)throw new Error("Sesioni përfundoi. Hyr përsëri dhe provo.");
     const {data,error}=await supabase.storage.from("dhuroje-listings").upload(path,file,{
-      contentType:"image/jpeg",
+      contentType:PHOTO_UPLOAD_TYPES.includes(file.type)?file.type:"image/jpeg",
       upsert:false,
       cacheControl:"3600"
     });
