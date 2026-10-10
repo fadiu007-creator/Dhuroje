@@ -775,10 +775,10 @@ export default function DhurojeHome(){
       <div className="explore-mobile-head">
         <div className="explore-location"><strong>Eksploro</strong></div>
         <div className="explore-head-actions">
-          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Dhurapikë"><span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b></button>
+          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Piket"><span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b></button>
           <button className="explore-search-button" onClick={()=>setExploreSearchOpen(v=>!v)} aria-label="Kërko">⌕</button>
         </div>
-        {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Dhurapikë</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
+        {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Piket</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
       </div>
       {exploreSearchOpen&&<div className="explore-search"><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko në Dhuroje"/>{query&&<button onClick={()=>setQuery("")}>×</button>}</div>}
       <div className="explore-tabs"><button className={exploreTab==="things"?"active":""} onClick={()=>{setExploreTab("things");setCategory("Të gjitha");setShowFilters(false)}}>🛋️ <span>Gjërat</span></button><button className={exploreTab==="food"?"active":""} onClick={()=>{setExploreTab("food");setCategory("Ushqim");setConditionFilter("all");setShowFilters(false)}}>Ushqim</button><button className={exploreTab==="requests"?"active":""} onClick={()=>{setExploreTab("requests");setShowFilters(false)}}>📋 Kërkesa</button></div>
@@ -819,10 +819,10 @@ export default function DhurojeHome(){
         </select>
         <div className="geev-mobile-head-actions">
           <button onClick={openNotifications} aria-label="Njoftimet">♧</button>
-          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Dhurapikë">
+          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Piket">
             <span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b>
           </button>
-          {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Dhurapikë</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
+          {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Piket</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
         </div>
       </div>
       <div className="geev-mobile-categories" aria-label="Kategoritë">
