@@ -74,11 +74,14 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
     return new File([bytes],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:file.lastModified||Date.now()});
   }
 
-  // Snapshot picker-backed files into ordinary in-memory bytes before decoding.
-  // Some gallery/document providers expose a File that can be selected and sliced
-  // for its header but fails when image decoders/FileReader consume the live handle.
-  // A fresh Blob detaches processing from that temporary provider handle.
+  // Keep standard browser-supported image files attached to their original
+  // File/Blob. On Android, copying a picker-backed File through stream() can
+  // produce bytes that the browser image decoder cannot decode, even though the
+  // original file can be displayed directly through an object URL.
+  const standardImageFormat=detectedMime==="image/jpeg"||detectedMime==="image/png"||detectedMime==="image/webp"||detectedMime==="image/gif";
+  // Snapshot only unknown/generic formats; don't rewrite standard image bytes.
   try{
+    if(!standardImageFormat){
     let snapshot:Uint8Array|null=null;
     if(typeof file.stream==="function"){
       try{
@@ -100,6 +103,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
     if(snapshot){
       const mime=detectedMime||file.type||"application/octet-stream";
       source=new Blob([snapshot.buffer.slice(snapshot.byteOffset,snapshot.byteOffset+snapshot.byteLength) as ArrayBuffer],{type:mime});
+    }
     }
   }catch(_snapshotError){}
 
@@ -197,7 +201,7 @@ async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Prom
         image=new Image();
         await new Promise<void>((resolve,reject)=>{
           image!.onload=()=>resolve();
-          image!.onerror=()=>reject(new Error("Shfletuesi nuk e mbështet këtë format fotoje ("+(file.type||"format i panjohur")+"). Provo ta ruash si JPG."));
+          image!.onerror=()=>reject(new Error("Shfletuesi nuk e hapi foton. Format="+(detectedMime||file.type||"i panjohur")+", madhësia="+Math.round(file.size/1024)+" KB, header="+Array.from(headerBytes.slice(0,12)).map(b=>b.toString(16).padStart(2,"0")).join("")+". Provo ta shkarkosh foton në telefon dhe zgjidhe nga skedarët lokalë."));
           image!.src=dataUrl;
         });
       }
