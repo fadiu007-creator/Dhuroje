@@ -204,11 +204,25 @@ async function uploadDhurojePhoto(path:string,file:File,onProgress?:(loaded:numb
     const {data:{session},error:sessionError}=await supabase.auth.getSession();
     if(sessionError||!session?.access_token)throw new Error("Sesioni përfundoi. Hyr përsëri dhe provo.");
     let lastError:any=null;
-    // Mobile connections can briefly drop while several photos are uploaded in sequence.
-    // Retry only transport failures; storage validation/auth errors should return immediately.
+    const storage=supabase.storage.from("dhuroje-listings");
+    const folder=path.slice(0,path.lastIndexOf("/"));
+    const filename=path.slice(path.lastIndexOf("/")+1);
+    // The server can save an object even when the phone loses the response ("Failed to fetch").
+    // Before retrying, check whether that exact object already exists to avoid a false failure
+    // and the listing rollback deleting otherwise successful uploads.
+    const verifyUploaded=async()=>{
+      try{
+        const {data,error}=await storage.list(folder,{search:filename,limit:100});
+        if(!error&&data?.some((item:any)=>item.name===filename)){
+          onProgress?.(file.size,file.size);
+          return {data:{path},error:null};
+        }
+      }catch(_verifyError){}
+      return null;
+    };
     for(let attempt=0;attempt<3;attempt++){
       try{
-        const {data,error}=await supabase.storage.from("dhuroje-listings").upload(path,file,{
+        const {data,error}=await storage.upload(path,file,{
           contentType:PHOTO_UPLOAD_TYPES.includes(file.type)?file.type:"image/jpeg",
           upsert:false,
           cacheControl:"3600"
@@ -225,6 +239,8 @@ async function uploadDhurojePhoto(path:string,file:File,onProgress?:(loaded:numb
         const message=String(error?.message||error).toLowerCase();
         if(!message.includes("failed to fetch")&&!message.includes("network")&&!message.includes("fetch"))return {data:null,error};
       }
+      const verified=await verifyUploaded();
+      if(verified)return verified;
       if(attempt<2)await new Promise(resolve=>setTimeout(resolve,700*(attempt+1)));
     }
     return {data:null,error:lastError||new Error("Ngarkimi dështoi pas disa përpjekjeve.")};
