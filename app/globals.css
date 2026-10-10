@@ -447,8 +447,8 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 .chat-messages{padding:18px 16px;display:flex;flex-direction:column;gap:4px;overflow:auto;min-height:420px}
 .message-row{display:flex;justify-content:flex-start;margin:3px 0}
 .message-row.mine{justify-content:flex-end}
-.message-row .bubble{max-width:min(72%,520px);background:#f1f4f2;border-radius:16px 16px 16px 5px;padding:9px 12px}
-.message-row.mine .bubble{background:var(--green);color:#fff;border-radius:16px 16px 5px 16px}
+.message-row .bubble{max-width:min(72%,520px);background:#e9edef;color:#202c33;border-radius:16px 16px 16px 5px;padding:9px 12px;box-shadow:0 1px 1px #0000000d}
+.message-row.mine .bubble{background:#d9fdd3;color:#163329;border-radius:16px 16px 5px 16px;box-shadow:0 1px 1px #0000000d}
 .message-row .bubble p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.42}
 .message-row .bubble small{display:block;margin-top:4px;opacity:.65;font-size:9px;text-align:right}
 .chat-day{text-align:center;margin:12px 0 8px;color:var(--muted);font-size:10px}
