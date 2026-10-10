@@ -258,7 +258,7 @@ function distanceKm(a:number|null,b:number|null,c:number|null,d:number|null){
 export default function DhurojeHome(){
   const [listings,setListings]=useState<Listing[]>([]),[images,setImages]=useState<Record<string,string[]>>({});
   const [category,setCategory]=useState<Category>("Të gjitha"),[query,setQuery]=useState("");
-  const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[dhurapike,setDhurapike]=useState(10),[showDhurapike,setShowDhurapike]=useState(false),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
+  const [user,setUser]=useState<any>(null),[profile,setProfile]=useState<any>(null),[dhurapike,setDhurapike]=useState(5),[showDhurapike,setShowDhurapike]=useState(false),[favorites,setFavorites]=useState<string[]>([]),[claims,setClaims]=useState<string[]>([]);
   const [showGive,setShowGive]=useState(false),[showAuth,setShowAuth]=useState(false),[postAuth,setPostAuth]=useState(false),[postChoice,setPostChoice]=useState(false),[showCreateMenu,setShowCreateMenu]=useState(false),[showMenu,setShowMenu]=useState(false),[showMessages,setShowMessages]=useState(false),[postingCategory,setPostingCategory]=useState("Ushqim");
   const [pendingPost,setPendingPost]=useState<FormData|null>(null),[posting,setPosting]=useState(false),[uploadProgress,setUploadProgress]=useState(0),[uploadStage,setUploadStage]=useState("");
   const [photoError,setPhotoError]=useState(false),[preparingPhotos,setPreparingPhotos]=useState(false),[photoInputKey,setPhotoInputKey]=useState(0),[photoPreviews,setPhotoPreviews]=useState<string[]>([]),[selectedPhotoFiles,setSelectedPhotoFiles]=useState<File[]>([]),[showDashboard,setShowDashboard]=useState(false),[showProfile,setShowProfile]=useState(false),[showNotifications,setShowNotifications]=useState(false),[publicProfileId,setPublicProfileId]=useState<string|null>(null),[notificationCount,setNotificationCount]=useState(0),[activeListing,setActiveListing]=useState<Listing|null>(null),[editingListing,setEditingListing]=useState<Listing|null>(null),[error,setError]=useState("");
@@ -325,7 +325,7 @@ export default function DhurojeHome(){
         supabase.from("dhuroje_favorites").select("listing_id").eq("user_id",u.id),
         supabase.from("dhuroje_claims").select("listing_id").eq("claimant_id",u.id)
       ]);
-      setProfile(p.data);setDhurapike(Number.isFinite(Number(p.data?.dhurapike))?Number(p.data.dhurapike):10);setListingCity(p.data?.city||"");setLocation(p.data?.city||"Ferizaj");setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
+      setProfile(p.data);setDhurapike(Number.isFinite(Number(p.data?.dhurapike))?Number(p.data.dhurapike):5);setListingCity(p.data?.city||"");setLocation(p.data?.city||"Ferizaj");setFavorites((f.data||[]).map(x=>x.listing_id));setClaims((c.data||[]).map(x=>x.listing_id));
     } else {setProfile(null);setFavorites([]);setClaims([]);}
     // Community requests are public; authentication is only required to create or act on one.
     const {data:rs,error:re}=await supabase.from("dhuroje_requests").select("*").eq("status","open").order("created_at",{ascending:false});
@@ -775,10 +775,10 @@ export default function DhurojeHome(){
       <div className="explore-mobile-head">
         <div className="explore-location"><strong>Eksploro</strong></div>
         <div className="explore-head-actions">
-          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Piket"><span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b></button>
+          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Piket"><span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:5}</b></button>
           <button className="explore-search-button" onClick={()=>setExploreSearchOpen(v=>!v)} aria-label="Kërko">⌕</button>
         </div>
-        {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Piket</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
+        {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Piket</strong><span>N'start 5 pikë.</span><span>−1 kur kërkon diçka</span><span>+1 kur dhuron diçka</span></div>}
       </div>
       {exploreSearchOpen&&<div className="explore-search"><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Kërko në Dhuroje..." aria-label="Kërko në Dhuroje"/>{query&&<button onClick={()=>setQuery("")}>×</button>}</div>}
       <div className="explore-tabs"><button className={exploreTab==="things"?"active":""} onClick={()=>{setExploreTab("things");setCategory("Të gjitha");setShowFilters(false)}}>🛋️ <span>Gjërat</span></button><button className={exploreTab==="food"?"active":""} onClick={()=>{setExploreTab("food");setCategory("Ushqim");setConditionFilter("all");setShowFilters(false)}}>Ushqim</button><button className={exploreTab==="requests"?"active":""} onClick={()=>{setExploreTab("requests");setShowFilters(false)}}>📋 Kërkesa</button></div>
@@ -1266,6 +1266,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
   async function send(){
     const text=body.trim();
     if(!selectedConversation||!text||sending)return;
+    if(dhurapike<=0){setError("Duhet të dhurosh për të marrë diçka të re.");return;}
     if(text.length>2000){setError("Mesazhi mund të ketë maksimum 2000 karaktere.");return;}
     setSending(true);
     setError("");
@@ -1352,8 +1353,8 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
           </div>
 
           <div className="professional-composer">
-            <textarea value={body} maxLength={2000} rows={1} onChange={e=>setBody(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder={"Shkruaj "+selected.otherName+"…"} />
-            <div><small>{body.length}/2000 · Enter për dërgim</small><button className="primary" disabled={sending||!body.trim()} onClick={send}>{sending?"Po dërgohet…":"Dërgo"}</button></div>
+            <textarea value={body} maxLength={2000} rows={1} onChange={e=>setBody(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder={dhurapike<=0?"Duhet të dhurosh për të marrë diçka të re.":"Shkruaj "+selected.otherName+"…"} disabled={dhurapike<=0} />
+            <div><small>{body.length}/2000 · Enter për dërgim</small><button className="primary" disabled={sending||!body.trim()||dhurapike<=0} onClick={send}>{sending?"Po dërgohet…":"Dërgo"}</button></div>
           </div>
         </section>:<div className="chat-no-selection"><span>💬</span><b>Zgjidh një bisedë</b><small>Mesazhet e tua do të shfaqen këtu.</small></div>}
       </div>
