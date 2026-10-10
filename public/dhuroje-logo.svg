@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260" role="img" aria-labelledby="title">
+<title>Dhuroje — Jepi një jetë të dytë</title>
+<g transform="translate(10 12)">
+  <path d="M20 115 C22 190 76 225 145 225 C214 225 268 190 270 115 L226 115 C224 164 194 185 145 185 C96 185 66 164 64 115 Z" fill="#fff"/>
+  <path d="M140 183 L140 78" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+  <path d="M136 111 C91 108 55 75 54 28 C102 27 137 61 136 111Z" fill="#a9e9c7"/>
+  <path d="M145 83 C145 34 183 1 234 0 C234 48 199 82 145 83Z" fill="#ffa98f"/>
+</g>
+<text x="315" y="126" font-family="Arial, Helvetica, sans-serif" font-size="104" font-weight="600" letter-spacing="-4" fill="#fff">Dhuroje</text>
+<text x="320" y="183" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="700" fill="#ffd5c9">Jepi një jetë të dytë.</text>
+</svg>
