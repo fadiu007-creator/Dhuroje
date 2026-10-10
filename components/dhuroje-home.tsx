@@ -30,289 +30,93 @@ function safeFormData(form: HTMLFormElement): FormData{
 
 const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"📱",kids:"🧸",books:"📚",other:"🎁"} as Record<string,string>)[c]||"🎁";
 
-async function compressImage(file:File,maxDimension=1400,maxBytes=700*1024):Promise<File>{
+// ---- Photo preparation -------------------------------------------------------
+// Simple pipeline: decode -> resize on a canvas -> JPEG under the size cap.
+// If the browser cannot decode the picked file (some Android gallery providers),
+// a JPEG/PNG/WebP that already fits the 5 MB bucket limit is uploaded as-is:
+// the upload reads it through the network stack, which works when FileReader does not.
+const PHOTO_BUCKET_LIMIT=5*1024*1024;
+const PHOTO_UPLOAD_TYPES=["image/jpeg","image/png","image/webp"];
+
+function toJpegFile(blob:Blob,originalName:string):File{
+  return new File([blob],(originalName.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+}
+
+type DecodedImage={source:CanvasImageSource;width:number;height:number;release:()=>void};
+
+async function decodeImage(blob:Blob):Promise<DecodedImage>{
+  if(typeof createImageBitmap==="function"){
+    try{
+      const bitmap=await createImageBitmap(blob);
+      return {source:bitmap,width:bitmap.width,height:bitmap.height,release:()=>bitmap.close()};
+    }catch(_bitmapError){}
+  }
+  const url=URL.createObjectURL(blob);
+  try{
+    const img=new Image();
+    await new Promise<void>((resolve,reject)=>{
+      img.onload=()=>resolve();
+      img.onerror=()=>reject(new Error("decode failed"));
+      img.src=url;
+    });
+    return {source:img,width:img.naturalWidth,height:img.naturalHeight,release:()=>URL.revokeObjectURL(url)};
+  }catch(error){
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+}
+
+function looksLikeHeic(file:File):boolean{
+  return /\.(heic|heif)$/i.test(file.name)||/image\/(heic|heif)/i.test(file.type);
+}
+
+async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes=500*1024):Promise<File>{
   if(!file||file.size===0)throw new Error("Skedari i fotos është bosh.");
   if(file.size>50*1024*1024)throw new Error("Fotoja duhet të jetë më e vogël se 50 MB.");
 
   let source:Blob=file;
-  const ext=file.name.split(".").pop()?.toLowerCase()||"";
-  let signature="";
-  try{
-    // Android's photo picker can give HEIC files a generic name or MIME type.
-    // Detect the actual container signature instead of relying on file.name/type.
-    const header=new Uint8Array(await file.slice(0,32).arrayBuffer());
-    signature=String.fromCharCode(...header);
-  }catch(_error){}
-  const heicBrand=/ftyp(heic|heix|hevc|hevx|heim|heis|heif|mif1|msf1)/i.test(signature);
-  const isHeic=/^(heic|heif|heics|heifs)$/.test(ext)
-    ||/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type)
-    ||heicBrand;
-
-  // Android photo providers sometimes return valid image bytes with an empty
-  // or generic MIME type. Sniff the header so the browser decodes the right format.
-  const headerBytes=new Uint8Array(await file.slice(0,32).arrayBuffer().catch(()=>new ArrayBuffer(0)));
-  const headerText=String.fromCharCode(...headerBytes);
-  let detectedMime="";
-  if(headerBytes[0]===0xff&&headerBytes[1]===0xd8&&headerBytes[2]===0xff)detectedMime="image/jpeg";
-  else if(headerText.startsWith("\x89PNG\r\n\x1a\n"))detectedMime="image/png";
-  else if(headerText.startsWith("GIF87a")||headerText.startsWith("GIF89a"))detectedMime="image/gif";
-  else if(headerText.startsWith("RIFF")&&headerText.slice(8,12)==="WEBP")detectedMime="image/webp";
-  else if(headerText.slice(4,12).includes("ftypavif")||headerText.slice(4,12).includes("ftypavis"))detectedMime="image/avif";
-  else if(heicBrand)detectedMime="image/heic";
-
-  // Fast path for a valid, already-small JPEG: this file is already below the
-  // requested storage limit, so do not force it through browser decoders that can
-  // fail on picker-backed files. The JPEG signature was verified from its header.
-  // This is not an oversized-original fallback: it is already within maxBytes.
-  if(detectedMime==="image/jpeg"&&file.size<=700*1024){
-    // Keep already-small JPEGs out of the browser decoding pipeline. This is
-    // still within the hard 700 KB storage cap, and avoids false failures from
-    // gallery-backed File objects that cannot be decoded by canvas/FileReader.
-    // Preserve the original bytes only when the JPEG is already under the cap.
-    const bytes=await file.arrayBuffer();
-    if(bytes.byteLength!==file.size)throw new Error("Skedari JPEG u lexua pjesërisht. Zgjidhe përsëri nga memoria e telefonit.");
-    return new File([bytes],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:file.lastModified||Date.now()});
-  }
-
-  // Keep standard browser-supported image files attached to their original
-  // File/Blob. On Android, copying a picker-backed File through stream() can
-  // produce bytes that the browser image decoder cannot decode, even though the
-  // original file can be displayed directly through an object URL.
-  const standardImageFormat=detectedMime==="image/jpeg"||detectedMime==="image/png"||detectedMime==="image/webp"||detectedMime==="image/gif";
-  // Snapshot only unknown/generic formats; don't rewrite standard image bytes.
-  try{
-    if(!standardImageFormat){
-    let snapshot:Uint8Array|null=null;
-    if(typeof file.stream==="function"){
-      try{
-        const reader=file.stream().getReader();
-        const chunks:Uint8Array[]=[];
-        let total=0;
-        while(true){
-          const part=await reader.read();
-          if(part.done)break;
-          if(part.value){chunks.push(part.value);total+=part.value.length;}
-          if(total>50*1024*1024)throw new Error("Fotoja është më e madhe se 50 MB.");
-        }
-        if(total){snapshot=new Uint8Array(total);let offset=0;for(const chunk of chunks){snapshot.set(chunk,offset);offset+=chunk.length;}}
-      }catch(_streamReadError){snapshot=null;}
-    }
-    if(!snapshot){
-      try{const buffer=await file.arrayBuffer();if(buffer.byteLength)snapshot=new Uint8Array(buffer);}catch(_arrayBufferReadError){}
-    }
-    if(snapshot){
-      const mime=detectedMime||file.type||"application/octet-stream";
-      source=new Blob([snapshot.buffer.slice(snapshot.byteOffset,snapshot.byteOffset+snapshot.byteLength) as ArrayBuffer],{type:mime});
-    }
-    }
-  }catch(_snapshotError){}
-
-  if(isHeic){
+  if(looksLikeHeic(file)){
     try{
       const heic=await import("heic2any");
       const converted=await heic.default({blob:file,toType:"image/jpeg",quality:0.85});
       source=Array.isArray(converted)?converted[0]:converted;
-      if(!(source instanceof Blob)||source.size===0)throw new Error("Konvertimi nuk prodhoi foto.");
-    }catch(_heicConversionError){
-      // Some valid HEIF variants are natively decodable on newer Android
-      // browsers but are not supported by heic2any. Try native decoding too.
-      source=detectedMime?new Blob([file],{type:detectedMime}):file;
-    }
-  }else if((!source.type||source.type==="application/octet-stream")&&detectedMime){
-    source=new Blob([file],{type:detectedMime});
+    }catch(_heicError){}
   }
-  // Decode the selected Blob directly. Avoid Compressor.js and browser-image-compression:
-  // both depend on FileReader paths that fail for some Android gallery/provider files.
-  let bitmap:ImageBitmap|null=null;
-  let image:HTMLImageElement|null=null;
-  let objectUrl:string|null=null;
-  let width=0,height=0;
+
+  let decoded:DecodedImage;
   try{
-    if(typeof createImageBitmap==="function"){
-      try{
-        bitmap=await createImageBitmap(source);
-        width=bitmap.width;height=bitmap.height;
-      }catch(_error){
-        bitmap=null;
-      }
-    }
-    if(!bitmap){
-      // Some Android gallery providers expose a temporary Blob URL that fails
-      // to decode, while a data URL from the same bytes works. Try both paths.
-      image=new Image();
-      try{
-        objectUrl=URL.createObjectURL(source);
-        await new Promise<void>((resolve,reject)=>{
-          image!.onload=()=>resolve();
-          image!.onerror=()=>reject(new Error("Blob URL decode failed"));
-          image!.src=objectUrl!;
-        });
-      }catch(_blobDecodeError){
-        let dataUrl="";
-        // Try independent browser paths before declaring an Android provider
-          // file unreadable. Some picker-backed Blobs reject arrayBuffer(), while
-          // the Blob slice or its temporary object URL can still yield the bytes.
-          let bytes:Uint8Array|null=null;
-          try{bytes=new Uint8Array(await source.arrayBuffer());}catch(_directReadError){}
-          if(!bytes){
-            try{bytes=new Uint8Array(await source.slice(0,source.size,source.type).arrayBuffer());}catch(_sliceReadError){}
-          }
-          if(!bytes&&objectUrl){
-            try{
-              const response=await fetch(objectUrl);
-              if(response.ok)bytes=new Uint8Array(await response.arrayBuffer());
-            }catch(_urlReadError){}
-          }
-          if(!bytes){
-            // Retry against the original File object. Some browser picker providers
-            // expose a readable File but fail after it is wrapped in a Blob.
-            try{bytes=new Uint8Array(await file.arrayBuffer());}catch(_originalReadError){}
-          }
-          if(!bytes){
-            try{bytes=await new Promise<Uint8Array>((resolve,reject)=>{
-              const reader=new FileReader();
-              reader.onload=()=>reader.result instanceof ArrayBuffer?resolve(new Uint8Array(reader.result)):reject(new Error("Leximi i bajteve dështoi."));
-              reader.onerror=()=>reject(new Error("Leximi i skedarit origjinal dështoi."));
-              reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
-              reader.readAsArrayBuffer(file);
-            });}catch(_originalReaderError){}
-          }
-          if(bytes){
-            let binary="";
-            const chunkSize=0x8000;
-            for(let offset=0;offset<bytes.length;offset+=chunkSize){
-              binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+chunkSize,bytes.length)));
-            }
-            const mime=source.type&&source.type!=="application/octet-stream"
-              ?source.type
-              :(detectedMime||file.type||"image/jpeg");
-            dataUrl="data:"+mime+";base64,"+btoa(binary);
-          }else{
-            // Last resort: read the original picker File directly as a data URL,
-            // not the derived Blob. This covers providers that reject Blob reads.
-            dataUrl=await new Promise<string>((resolve,reject)=>{
-              const reader=new FileReader();
-              reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Skedari u zgjodh, por telefoni nuk lejoi leximin e bajteve."));
-              reader.onerror=()=>reject(new Error("Telefoni/galeria nuk lejoi leximin e kësaj fotoje. Shkarkoje ose ruaje lokalisht nga Galeria dhe provo përsëri."));
-              reader.onabort=()=>reject(new Error("Leximi i fotos u anulua."));
-              reader.readAsDataURL(file);
-            });
-          }
-        image=new Image();
-        await new Promise<void>((resolve,reject)=>{
-          image!.onload=()=>resolve();
-          image!.onerror=()=>reject(new Error("Shfletuesi nuk e hapi foton. Format="+(detectedMime||file.type||"i panjohur")+", madhësia="+Math.round(file.size/1024)+" KB, header="+Array.from(headerBytes.slice(0,12)).map(b=>b.toString(16).padStart(2,"0")).join("")+". Provo ta shkarkosh foton në telefon dhe zgjidhe nga skedarët lokalë."));
-          image!.src=dataUrl;
-        });
-      }
-      width=image.naturalWidth;height=image.naturalHeight;
-    }
-    if(!width||!height)throw new Error("Fotoja nuk ka përmasa të vlefshme.");
-    // An already-small JPEG is already in the storage format: keep its bytes
-    // instead of degrading it by encoding it a second time.
-    if(detectedMime==="image/jpeg"&&source.size<=maxBytes&&width<=maxDimension&&height<=maxDimension){
-      return new File([source],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }
-    const scale=Math.min(1,maxDimension/Math.max(width,height));
-    let outWidth=Math.max(1,Math.round(width*scale));
-    let outHeight=Math.max(1,Math.round(height*scale));
+    decoded=await decodeImage(source);
+  }catch(_decodeError){
+    const type=file.type||"";
+    if(PHOTO_UPLOAD_TYPES.includes(type)&&file.size<=PHOTO_BUCKET_LIMIT)return file;
+    throw new Error("Shfletuesi nuk e hapi foton. Provo një foto tjetër ose ruaje si JPG.");
+  }
+
+  try{
+    if(!decoded.width||!decoded.height)throw new Error("Fotoja nuk ka përmasa të vlefshme.");
+    let scale=Math.min(1,maxDimension/Math.max(decoded.width,decoded.height));
     const canvas=document.createElement("canvas");
-    const context=canvas.getContext("2d");
-    if(!context)throw new Error("Shfletuesi nuk mbështet përpunimin e fotos.");
-    const draw=()=>{
-      canvas.width=outWidth;canvas.height=outHeight;
-      const ctx=canvas.getContext("2d");
-      if(!ctx)throw new Error("Nuk u krijua kanavaca e fotos.");
-      ctx.fillStyle="#ffffff";ctx.fillRect(0,0,outWidth,outHeight);
-      if(bitmap)ctx.drawImage(bitmap,0,0,outWidth,outHeight);
-      else if(image)ctx.drawImage(image,0,0,outWidth,outHeight);
-    };
-    const toJpeg=(quality:number)=>new Promise<Blob>((resolve,reject)=>{
-      canvas.toBlob(blob=>blob&&blob.size>0?resolve(blob):reject(new Error("Shfletuesi nuk krijoi foton JPEG.")),"image/jpeg",quality);
-    });
-    let output:Blob|null=null;
-    // Continue reducing both quality and dimensions for difficult high-resolution photos.
-    for(let resize=0;resize<10;resize++){
-      draw();
-      for(const quality of [0.82,0.72,0.62,0.52,0.42,0.32,0.25]){
-        const blob=await toJpeg(quality);
-        if(!output||blob.size<output.size)output=blob;
-        if(blob.size<=maxBytes){
-          return new File([blob],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-        }
+    const ctx=canvas.getContext("2d");
+    if(!ctx)throw new Error("Shfletuesi nuk mbështet përpunimin e fotos.");
+    let best:Blob|null=null;
+    for(let attempt=0;attempt<8;attempt++){
+      canvas.width=Math.max(1,Math.round(decoded.width*scale));
+      canvas.height=Math.max(1,Math.round(decoded.height*scale));
+      ctx.fillStyle="#ffffff";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(decoded.source,0,0,canvas.width,canvas.height);
+      for(const quality of [0.85,0.72,0.6,0.48,0.36]){
+        const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
+        if(!blob||blob.size===0)continue;
+        if(!best||blob.size<best.size)best=blob;
+        if(blob.size<=targetBytes)return toJpegFile(blob,file.name);
       }
-      outWidth=Math.max(1,Math.round(outWidth*0.78));
-      outHeight=Math.max(1,Math.round(outHeight*0.78));
+      scale*=0.8;
     }
-    if(output&&output.size<=maxBytes)return new File([output],(file.name.replace(/\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    throw new Error("Fotoja nuk u zvogëlua nën "+Math.round(maxBytes/1024)+" KB. Provo një foto me rezolucion më të ulët.");
-  }catch(error:any){
-    throw new Error("Fotoja nuk mund të lexohej ose përpunohej. "+(error?.message||String(error)||"Provo të zgjedhësh foton përsëri."));
+    if(best&&best.size<=PHOTO_BUCKET_LIMIT)return toJpegFile(best,file.name);
+    throw new Error("Fotoja është shumë e madhe. Provo një foto me rezolucion më të ulët.");
   }finally{
-    if(bitmap)bitmap.close();
-    if(objectUrl)URL.revokeObjectURL(objectUrl);
-  }
-}
-// Alternate browser encoders are used only when our primary decoder fails.
-// They run on the main thread for Android compatibility and never upload the original.
-async function compressWithLibraryFallback(file:File,maxDimension:number,maxBytes:number):Promise<File>{
-  const errors:string[]=[];
-  try{
-    const module=await import("browser-image-compression");
-    const result=await module.default(file,{
-      maxSizeMB:maxBytes/(1024*1024),
-      maxWidthOrHeight:maxDimension,
-      useWebWorker:false,
-      fileType:"image/jpeg",
-      initialQuality:0.82
-    });
-    if(result&&result.size>0&&result.size<=maxBytes){
-      return new File([result],(file.name.replace(/\\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }
-    errors.push("browser-image-compression nuk arriti madhësinë e kërkuar");
-  }catch(error:any){errors.push("browser-image-compression: "+String(error?.message||error||"dështoi"));}
-  try{
-    const module=await import("compressorjs");
-    const result=await new Promise<Blob>((resolve,reject)=>{
-      new module.default(file,{
-        quality:0.82,
-        maxWidth:maxDimension,
-        maxHeight:maxDimension,
-        mimeType:"image/jpeg",
-        convertSize:0,
-        success(blob:Blob){resolve(blob);},
-        error(error:Error){reject(error);}
-      });
-    });
-    if(result.size>0&&result.size<=maxBytes){
-      return new File([result],(file.name.replace(/\\.[^.]+$/,"")||"foto")+".jpg",{type:"image/jpeg",lastModified:Date.now()});
-    }
-    errors.push("compressorjs nuk arriti madhësinë e kërkuar");
-  }catch(error:any){errors.push("compressorjs: "+String(error?.message||error||"dështoi"));}
-  throw new Error(errors.join("; ")||"Nuk u gjet mënyrë alternative për përpunimin e fotos.");
-}
-// Aim for 500 KB, allowing up to 700 KB only when needed. Never upload the
-// untouched original as a fallback. Try independent encoders for difficult Android files.
-async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes=500*1024):Promise<File>{
-  let firstError:any=null;
-  try{
-    return await compressImage(file,maxDimension,targetBytes);
-  }catch(error:any){firstError=error;}
-  const firstMessage=String(firstError?.message||firstError||"");
-  const sizeLimitFailure=firstMessage.includes("nën")&&firstMessage.includes("KB");
-  if(sizeLimitFailure&&targetBytes<700*1024){
-    try{return await compressImage(file,maxDimension,700*1024);}catch(error:any){firstError=error;}
-  }
-  try{
-    return await compressWithLibraryFallback(file,maxDimension,targetBytes);
-  }catch(error:any){
-    const alternateError=error;
-    if(targetBytes<700*1024){
-      try{return await compressWithLibraryFallback(file,maxDimension,700*1024);}catch(error700:any){
-        throw new Error("Përpunimi dështoi. Metoda kryesore: "+String(firstError?.message||firstError||"gabim i panjohur")+". Metodat rezervë: "+String(alternateError?.message||alternateError||"gabim i panjohur")+"; "+String(error700?.message||error700||"gabim i panjohur"));
-      }
-    }
-    throw new Error("Përpunimi dështoi. "+String(firstError?.message||firstError||"gabim i panjohur")+"; "+String(alternateError?.message||alternateError||"gabim i panjohur"));
+    decoded.release();
   }
 }
 
@@ -340,6 +144,19 @@ async function rotatePhotoFile(file:File,degrees:number):Promise<File>{
   }finally{URL.revokeObjectURL(sourceUrl);}
 }
 
+// Android's photo picker hands out File objects backed by temporary content URIs that can
+// stop being readable once the input is cleared, disabled or re-rendered. Copy the bytes into
+// memory immediately (before any state change) and work from the copy instead.
+async function snapshotPickedFiles(files:File[]):Promise<File[]>{
+  return Promise.all(files.map(async file=>{
+    try{
+      const bytes=await file.arrayBuffer();
+      if(!bytes.byteLength||bytes.byteLength!==file.size)return file;
+      return new File([bytes],file.name,{type:file.type,lastModified:file.lastModified});
+    }catch(_snapshotError){return file;}
+  }));
+}
+
 const supabase=createClient();
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -361,7 +178,7 @@ async function uploadDhurojePhoto(path:string,file:File,onProgress?:(loaded:numb
     const {data:{session},error:sessionError}=await supabase.auth.getSession();
     if(sessionError||!session?.access_token)throw new Error("Sesioni përfundoi. Hyr përsëri dhe provo.");
     const {data,error}=await supabase.storage.from("dhuroje-listings").upload(path,file,{
-      contentType:"image/jpeg",
+      contentType:PHOTO_UPLOAD_TYPES.includes(file.type)?file.type:"image/jpeg",
       upsert:false,
       cacheControl:"3600"
     });
@@ -1005,7 +822,7 @@ export default function DhurojeHome(){
     {showGive&&<div className="page-screen request-page-screen"><div className="page-content request-page-content"><form className="request-form-card listing-form-card" onSubmit={createListing}><div className="request-form-head"><div><p className="eyebrow">DHUROJE</p><h2>Çfarë dëshiron të dhurosh?</h2><span>Publiko diçka që nuk e përdor më dhe mund t’i nevojitet dikujt.</span></div><button type="button" className="close" onClick={goHome}>×</button></div><label>Çfarë po dhuron?<input name="title" required placeholder={postingCategory==="Ushqim"?"p.sh. 5 pako bukë":"p.sh. karrige, rroba, libra..."}/></label><label>Kategoria<select name="category" value={postingCategory} onChange={e=>setPostingCategory(e.target.value)}>{categories.slice(1).map(x=><option key={x}>{x}</option>)}</select></label>
       {postingCategory!=="Ushqim"&&<label>Gjendja e objektit<select name="condition" defaultValue="good" required><option value="new">Si i ri</option><option value="good">Në gjendje të mirë</option><option value="worn">I përdorur</option><option value="broken">I dëmtuar</option></select></label>}
       <label>Qyteti<select name="city" value={listingCity} onChange={e=>setListingCity(e.target.value)} required>{profile?.city&&!cities.includes(profile.city)&&<option value={profile.city}>{profile.city}</option>}{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input key={photoInputKey} name="photos" type="file" accept="image/*,.heic,.heif" multiple disabled={preparingPhotos||posting||selectedPhotoFiles.length>=6} onClick={e=>{e.currentTarget.value="";}} onChange={async e=>{const input=e.currentTarget;const existing=selectedPhotoFiles;const files=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,Math.max(0,6-existing.length));if(!files.length){input.value="";setPhotoInputKey(k=>k+1);return;}setPhotoError(false);setError("");setPreparingPhotos(true);setUploadStage("Po përgatiten fotot…");const ready:File[]=[];const failed:string[]=[];try{for(let i=0;i<files.length;i++){setUploadStage("Po përpunohet fotoja "+(i+1)+" nga "+files.length+"…");try{const compressed=await withTimeout(compressPhotoWithFallback(files[i],1200,500*1024),75000,"Përgatitja e fotos zgjati shumë.");ready.push(compressed);}catch(photoErr:any){const reason=String(photoErr?.message||photoErr||"gabim i panjohur");failed.push((files[i].name||("Fotoja "+(i+1)))+" ("+reason+")");}}const next=[...existing,...ready].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(old=>{old.forEach(url=>URL.revokeObjectURL(url));return next.map(f=>URL.createObjectURL(f));});setUploadStage("");if(failed.length){setPhotoError(true);setError((ready.length?"Disa foto u shtuan, por këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Zgjidhi përsëri ose provo t'i ruash si JPG.");}else{setPhotoError(false);setError("");}}finally{setPreparingPhotos(false);input.value="";setPhotoInputKey(k=>k+1);}}}/></label>{photoError&&<p className="form-inline-error" role="alert">Kjo foto nuk funksionoi. Ju lutem zgjidhni një foto tjetër te “Shto foto”.</p>}{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">{preparingPhotos?"Fotot po kompresohen në telefon para se të ruhen. Mos e mbyll këtë faqe.":"Minimum 1, maksimum 6 foto."}</small></div>
+      <div className={"photo-picker"+(photoError?" photo-picker-invalid":"")}><span className="photo-label">Fotot <b className="required-mark">*</b></span><label className="photo-button">➕ Shto foto<input key={photoInputKey} name="photos" type="file" accept="image/*" multiple disabled={posting||selectedPhotoFiles.length>=6} onClick={e=>{e.currentTarget.value="";}} onChange={async e=>{const input=e.currentTarget;const existing=selectedPhotoFiles;const picked=Array.from(input.files||[]).filter(f=>f.size>0).slice(0,Math.max(0,6-existing.length));if(!picked.length){input.value="";setPhotoInputKey(k=>k+1);return;}const files=await snapshotPickedFiles(picked);setPhotoError(false);setError("");setPreparingPhotos(true);setUploadStage("Po përgatiten fotot…");const ready:File[]=[];const failed:string[]=[];try{for(let i=0;i<files.length;i++){setUploadStage("Po përpunohet fotoja "+(i+1)+" nga "+files.length+"…");try{const compressed=await withTimeout(compressPhotoWithFallback(files[i],1200,500*1024),75000,"Përgatitja e fotos zgjati shumë.");ready.push(compressed);}catch(photoErr:any){const reason=String(photoErr?.message||photoErr||"gabim i panjohur");failed.push((files[i].name||("Fotoja "+(i+1)))+" ("+reason+")");}}const next=[...existing,...ready].slice(0,6);setSelectedPhotoFiles(next);setPhotoPreviews(old=>{old.forEach(url=>URL.revokeObjectURL(url));return next.map(f=>URL.createObjectURL(f));});setUploadStage("");if(failed.length){setPhotoError(true);setError((ready.length?"Disa foto u shtuan, por këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Zgjidhi përsëri ose provo t'i ruash si JPG.");}else{setPhotoError(false);setError("");}}finally{setPreparingPhotos(false);input.value="";setPhotoInputKey(k=>k+1);}}}/></label>{photoError&&<p className="form-inline-error" role="alert">Kjo foto nuk funksionoi. Ju lutem zgjidhni një foto tjetër te “Shto foto”.</p>}{photoPreviews.length>0&&<div className="photo-thumbnails" aria-label="Fotot e zgjedhura">{photoPreviews.map((src,i)=><div className="photo-thumbnail" key={src}><img src={src} alt={"Foto "+(i+1)}/><button type="button" className="photo-remove" aria-label={"Hiq foton "+(i+1)} onClick={()=>{const next=selectedPhotoFiles.filter((_,index)=>index!==i);setSelectedPhotoFiles(next);setPhotoPreviews(next.map(f=>URL.createObjectURL(f)));if(!next.length)setPhotoError(false);}}>×</button><span>{i+1}</span></div>)}</div>}{photoError&&<small className="photo-validation-error">Ju lutem plotësoni këtë fushë duke shtuar të paktën 1 foto.</small>}<small className="form-help">{preparingPhotos?"Fotot po kompresohen në telefon para se të ruhen. Mos e mbyll këtë faqe.":"Minimum 1, maksimum 6 foto."}</small></div>
       <label>Përshkrimi <b className="required-mark">*</b><textarea name="description" required placeholder={postingCategory==="Ushqim"?"Çfarë ushqimi është, sasia dhe kushtet e marrjes...":"Gjendja, madhësia, marka, sasia dhe kushtet e marrjes..."}/></label>
       {postingCategory==="Ushqim"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox"/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox"/> E hapur</label></div></div>}
 {posting&&<div className="photo-upload-progress" role="status" aria-live="polite" style={{margin:"14px 0",padding:"12px",border:"1px solid #dce8df",borderRadius:"12px",background:"#f7fbf8"}}><div style={{display:"flex",justifyContent:"space-between",gap:"12px",marginBottom:"8px",fontSize:"14px",fontWeight:600}}><span>{uploadStage||"Po ngarkohet…"}</span><span>{uploadProgress}%</span></div><div role="progressbar" aria-label="Përparimi i ngarkimit të fotove" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress} style={{height:"8px",width:"100%",background:"#dfe8e1",borderRadius:"999px",overflow:"hidden"}}><div style={{height:"100%",width:uploadProgress+"%",background:"#23864b",borderRadius:"999px",transition:"width 160ms ease"}} /></div><small style={{display:"block",marginTop:"7px",color:"#52645a"}}>Mos e mbyll këtë faqe derisa të përfundojë ngarkimi.</small></div>}<button className="primary full" type="submit" disabled={posting||preparingPhotos||selectedPhotoFiles.length<1||selectedPhotoFiles.length!==photoPreviews.length}>{posting?"Po publikohet…":selectedPhotoFiles.length<1?"Shto të paktën 1 foto":user?"Publiko falas":"Krijo llogari & publiko"}</button>
@@ -1017,7 +834,7 @@ export default function DhurojeHome(){
       <label>Kategoria<select name="category" value={requestDraft.category} onChange={e=>setRequestDraft(v=>({...v,category:e.target.value}))}>{categories.filter(x=>x!=="Të gjitha").map(c=><option key={c} value={categoryDb[c]}>{c}</option>)}</select></label>
       <label>Qyteti<select name="location_name" value={requestDraft.location_name} onChange={e=>setRequestDraft(v=>({...v,location_name:e.target.value}))}>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
       <label>Përshkrimi<textarea name="description" rows={4} maxLength={500} value={requestDraft.description} onChange={e=>setRequestDraft(v=>({...v,description:e.target.value}))} placeholder="Shkruaj pak më shumë për atë që të nevojitet..." /></label>
-      <div className="photo-picker request-photo-picker"><span className="photo-label">Foto <small>(opsionale)</small></span><label className="photo-button">➕ Shto foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=Array.from(input.files||[])[0];if(!file)return;try{setError("");const compressed=await compressPhotoWithFallback(file,1200,500*1024);if(compressed){setRequestPhoto(compressed);setRequestPhotoPreview(URL.createObjectURL(compressed));}}catch(err:any){setError(err?.message||"Fotoja nuk mund të përpunohej.");}finally{input.value="";}}}/></label>{requestPhotoPreview&&<div className="photo-thumbnails"><div className="photo-thumbnail"><img src={requestPhotoPreview} alt="Foto e kërkesës"/><button type="button" className="photo-remove" onClick={()=>{setRequestPhoto(null);setRequestPhotoPreview("");}}>×</button></div></div>}<small className="form-help">.</small></div>
+      <div className="photo-picker request-photo-picker"><span className="photo-label">Foto <small>(opsionale)</small></span><label className="photo-button">➕ Shto foto<input type="file" accept="image/*" onChange={async e=>{const input=e.currentTarget;const file=Array.from(input.files||[])[0];if(!file)return;try{setError("");const compressed=await compressPhotoWithFallback(file,1200,500*1024);if(compressed){setRequestPhoto(compressed);setRequestPhotoPreview(URL.createObjectURL(compressed));}}catch(err:any){setError(err?.message||"Fotoja nuk mund të përpunohej.");}finally{input.value="";}}}/></label>{requestPhotoPreview&&<div className="photo-thumbnails"><div className="photo-thumbnail"><img src={requestPhotoPreview} alt="Foto e kërkesës"/><button type="button" className="photo-remove" onClick={()=>{setRequestPhoto(null);setRequestPhotoPreview("");}}>×</button></div></div>}<small className="form-help">.</small></div>
       {error&&<div className="form-inline-error" role="alert">{error}</div>}
       <div className="request-form-actions"><button type="button" onClick={()=>setShowRequestForm(false)}>Anulo</button><button className="primary" type="submit" disabled={requestSaving}>{requestSaving?"Po ruhet...":"Publiko kërkesën"}</button></div>
     </form></div></div>}
@@ -1188,7 +1005,7 @@ function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=
     <label>Qyteti<select name="location_name" value={locationName} onChange={e=>setLocationName(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <button type="button" className="secondary full" onClick={captureLocation}>📍 Përdor lokacionin tim</button>
     {category==="food"&&<div className="food-fields"><p className="form-section-title">🍎 Informacion për ushqimin</p><div className="check-row"><label><input name="food_refrigerated" type="checkbox" defaultChecked={!!listing.food_refrigerated}/> Kërkon frigorifer</label><label><input name="food_opened" type="checkbox" defaultChecked={!!listing.food_opened}/> E hapur</label></div></div>}
-    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" style={{transform:"rotate("+(((photoRotations[p.id]||0)%360+360)%360)+"deg)"}} /><button type="button" aria-label={removePhotoIds.includes(p.id)?"Rikthe foton":"Hiq foton"} onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button>{!removePhotoIds.includes(p.id)&&<div style={{display:"flex",gap:4,position:"absolute",left:4,bottom:4}}><button type="button" aria-label="Rrotullo majtas" title="Rrotullo majtas" onClick={()=>setPhotoRotations(r=>({...r,[p.id]:((r[p.id]||0)+270)%360}))} style={{position:"static",width:30,height:30,borderRadius:8,background:"rgba(0,0,0,.72)",color:"#fff",border:0}}>↶</button><button type="button" aria-label="Rrotullo djathtas" title="Rrotullo djathtas" onClick={()=>setPhotoRotations(r=>({...r,[p.id]:((r[p.id]||0)+90)%360}))} style={{position:"static",width:30,height:30,borderRadius:8,background:"rgba(0,0,0,.72)",color:"#fff",border:0}}>↷</button></div>}</div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={async e=>{const input=e.currentTarget;const files=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);const compressed:File[]=[];const failed:string[]=[];setError("");try{for(const file of files){try{compressed.push(await compressPhotoWithFallback(file,1200,500*1024));}catch(_err){failed.push(file.name||"Foto");}}setNewFiles(compressed);if(failed.length)setError((compressed.length?"Disa foto u shtuan; këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Provo t'i ruash si JPG.");else if(files.length&&!compressed.length)setError("Nuk u zgjodh asnjë foto e vlefshme.");}finally{input.value="";}}}/></label></div>
+    <div className="photo-picker"><span className="photo-label">Fotot</span>{photos.length>0&&<div className="edit-photo-grid">{photos.map(p=><div className={removePhotoIds.includes(p.id)?"edit-photo removed":"edit-photo"} key={p.id}><img src={p.url} alt="" style={{transform:"rotate("+(((photoRotations[p.id]||0)%360+360)%360)+"deg)"}} /><button type="button" aria-label={removePhotoIds.includes(p.id)?"Rikthe foton":"Hiq foton"} onClick={()=>setRemovePhotoIds(x=>x.includes(p.id)?x.filter(id=>id!==p.id):[...x,p.id])}>{removePhotoIds.includes(p.id)?"↩":"×"}</button>{!removePhotoIds.includes(p.id)&&<div style={{display:"flex",gap:4,position:"absolute",left:4,bottom:4}}><button type="button" aria-label="Rrotullo majtas" title="Rrotullo majtas" onClick={()=>setPhotoRotations(r=>({...r,[p.id]:((r[p.id]||0)+270)%360}))} style={{position:"static",width:30,height:30,borderRadius:8,background:"rgba(0,0,0,.72)",color:"#fff",border:0}}>↶</button><button type="button" aria-label="Rrotullo djathtas" title="Rrotullo djathtas" onClick={()=>setPhotoRotations(r=>({...r,[p.id]:((r[p.id]||0)+90)%360}))} style={{position:"static",width:30,height:30,borderRadius:8,background:"rgba(0,0,0,.72)",color:"#fff",border:0}}>↷</button></div>}</div>)}</div>}<label className="photo-button">📷 Shto foto të reja<input type="file" accept="image/*" multiple onChange={async e=>{const input=e.currentTarget;const picked=Array.from(e.target.files||[]).filter(f=>f.size>0).slice(0,6);const files=await snapshotPickedFiles(picked);const compressed:File[]=[];const failed:string[]=[];setError("");try{for(const file of files){try{compressed.push(await compressPhotoWithFallback(file,1200,500*1024));}catch(_err){failed.push(file.name||"Foto");}}setNewFiles(compressed);if(failed.length)setError((compressed.length?"Disa foto u shtuan; këto nuk u përpunuan: ":"Nuk u përpunuan fotot: ")+failed.join(", ")+". Provo t'i ruash si JPG.");else if(files.length&&!compressed.length)setError("Nuk u zgjodh asnjë foto e vlefshme.");}finally{input.value="";}}}/></label></div>
     <button className="primary full" disabled={saving}>{saving?"Po ruhet…":"Ruaj ndryshimet"}</button>
   </form></div>;
 }
@@ -1255,7 +1072,7 @@ function ProfileModal({user,onClose,onChanged}:{user:any;onClose:()=>void;onChan
       <form className="profile-form" onSubmit={save}>
         <div className="profile-photo-editor">
           <div className="profile-photo-preview">{avatarPreview?<img src={avatarPreview} alt="Foto e profilit" />:<span>{(name||user.email||"P").slice(0,1).toUpperCase()}</span>}</div>
-          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*,.heic,.heif" onChange={async e=>{const input=e.currentTarget;const file=e.target.files?.[0]||null;if(!file){setAvatarFile(null);return;}try{const compressed=await compressPhotoWithFallback(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale</small></div>
+          <div><label className="photo-button">📷 Zgjidh foto<input type="file" accept="image/*" onChange={async e=>{const input=e.currentTarget;const picked=e.target.files?.[0]||null;if(!picked){setAvatarFile(null);return;}try{const [file]=await snapshotPickedFiles([picked]);const compressed=await compressPhotoWithFallback(file,800,500*1024);if(compressed){setAvatarFile(compressed);setAvatarPreview(URL.createObjectURL(compressed));}}catch(err:any){alert(err?.message||"Fotoja nuk mund të kompresohej.");}finally{input.value="";}}}/></label><small className="form-help">Foto e profilit · opsionale</small></div>
         </div>
         <label>Emri<input value={name} onChange={e=>setName(e.target.value)} maxLength={60}/></label>
         <label>Qyteti <span className="required-mark">*</span><select value={city} onChange={e=>setCity(e.target.value)} required><option value="">Zgjidh qytetin</option>{cities.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
