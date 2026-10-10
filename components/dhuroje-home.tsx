@@ -203,14 +203,31 @@ async function uploadDhurojePhoto(path:string,file:File,onProgress?:(loaded:numb
   try{
     const {data:{session},error:sessionError}=await supabase.auth.getSession();
     if(sessionError||!session?.access_token)throw new Error("Sesioni përfundoi. Hyr përsëri dhe provo.");
-    const {data,error}=await supabase.storage.from("dhuroje-listings").upload(path,file,{
-      contentType:PHOTO_UPLOAD_TYPES.includes(file.type)?file.type:"image/jpeg",
-      upsert:false,
-      cacheControl:"3600"
-    });
-    if(error)return {data:null,error};
-    onProgress?.(file.size,file.size);
-    return {data,error:null};
+    let lastError:any=null;
+    // Mobile connections can briefly drop while several photos are uploaded in sequence.
+    // Retry only transport failures; storage validation/auth errors should return immediately.
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        const {data,error}=await supabase.storage.from("dhuroje-listings").upload(path,file,{
+          contentType:PHOTO_UPLOAD_TYPES.includes(file.type)?file.type:"image/jpeg",
+          upsert:false,
+          cacheControl:"3600"
+        });
+        if(!error){
+          onProgress?.(file.size,file.size);
+          return {data,error:null};
+        }
+        lastError=error;
+        const message=String(error.message||error).toLowerCase();
+        if(!message.includes("failed to fetch")&&!message.includes("network")&&!message.includes("fetch"))return {data:null,error};
+      }catch(error:any){
+        lastError=error;
+        const message=String(error?.message||error).toLowerCase();
+        if(!message.includes("failed to fetch")&&!message.includes("network")&&!message.includes("fetch"))return {data:null,error};
+      }
+      if(attempt<2)await new Promise(resolve=>setTimeout(resolve,700*(attempt+1)));
+    }
+    return {data:null,error:lastError||new Error("Ngarkimi dështoi pas disa përpjekjeve.")};
   }catch(error:any){
     return {data:null,error};
   }
