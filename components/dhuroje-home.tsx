@@ -428,7 +428,7 @@ export default function DhurojeHome(){
     await load();
     navigatePage("home");
   }
-  async function signOut(){await supabase.auth.signOut();setShowMenu(false);setShowProfile(false);setShowNotifications(false);await load();}
+  async function signOut(){await supabase.auth.signOut();setShowMenu(false);setShowProfile(false);setShowNotifications(false);setShowDashboard(false);setShowMessages(false);setShowGive(false);setShowAuth(false);setActiveListing(null);setEditingListing(null);setPublicProfileId(null);setMessageConversationId("");setPostChoice(false);setPostAuth(false);setFavoritesOnly(false);setNearbyOnly(false);setShowFilters(false);setSearchCity("");window.history.replaceState({page:"home"},"",window.location.pathname);setPageRoute({page:"home"});await load();}
   async function loadNotificationCount(){
     if(!user){setNotificationCount(0);return;}
     const {count}=await supabase.from("dhuroje_notifications").select("id",{count:"exact",head:true}).eq("recipient_id",user.id).is("read_at",null);
@@ -1443,7 +1443,7 @@ function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,o
       <button className={section==="listings"?"active":""} onClick={()=>goSection("listings")}>🎁 Shpalljet e mia <span>{activeMine.length}</span></button>
       <button onClick={onSaved}>♥ Lista e dëshirave</button>
       <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Kerkesat e mia <span>{requestedCount}</span></button>
-      <button className="secondary danger" onClick={()=>{if(window.confirm("Dëshiron të dalësh nga llogaria?"))void onSignOut();}}>↪ Dil nga llogaria</button>
+      <button className="secondary danger" onClick={()=>{void onSignOut();}}>↪ Dil nga llogaria</button>
     </nav>
 
     {section==="overview"&&<section className="account-section">
