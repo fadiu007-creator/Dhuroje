@@ -1361,7 +1361,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
   const [section,setSection]=useState<"overview"|"listings"|"requested">(
     initialSection==="listings"||initialSection==="requested"?initialSection:"overview"
   );
-  const [mine,setMine]=useState<Listing[]>([]),[wanted,setWanted]=useState<Claim[]>([]),[busy,setBusy]=useState(false);
+  const [mine,setMine]=useState<Listing[]>([]),[mineImages,setMineImages]=useState<Record<string,string>>({}),[wanted,setWanted]=useState<Claim[]>([]),[busy,setBusy]=useState(false);
 
   async function load(){
     if(!user)return;
@@ -1369,7 +1369,14 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
       supabase.from("dhuroje_listings").select("*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url)").eq("owner_id",user.id).order("created_at",{ascending:false}),
       supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*, owner:dhuroje_profiles!dhuroje_listings_owner_id_fkey(id,display_name,avatar_url))").eq("claimant_id",user.id).order("created_at",{ascending:false})
     ]);
-    setMine((ls||[]) as Listing[]);
+    const listings=(ls||[]) as Listing[];
+    setMine(listings);
+    if(listings.length){
+      const {data:photoRows}=await supabase.from("dhuroje_listing_images").select("listing_id,storage_path,sort_order").in("listing_id",listings.map(x=>x.id)).order("sort_order",{ascending:true});
+      const first:Record<string,string>={};
+      (photoRows||[]).forEach((photo:any)=>{if(!first[photo.listing_id])first[photo.listing_id]=supabase.storage.from("dhuroje-listings").getPublicUrl(photo.storage_path).data.publicUrl;});
+      setMineImages(first);
+    }else setMineImages({});
     setWanted((myClaims||[]).filter((x:any)=>x.status!=="cancelled") as any[]);
   }
   useEffect(()=>{load();},[user]);
@@ -1450,7 +1457,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
     {section==="listings"&&<section className="account-section">
       <div className="account-section-head"><div><p className="eyebrow">DHURATAT E MIA</p><h2>Shpalljet e mia</h2><p>Menaxho dhuratat aktive dhe ato që i ke dhënë.</p></div></div>
       <div className="dash-list">{activeMine.length?activeMine.map(x=><div className="dash-row account-list-row" key={x.id} onClick={()=>onListing(x)}>
-        <span className="dash-icon">{emoji(x.category)}</span>
+        {mineImages[x.id]?<img src={mineImages[x.id]} alt="" className="dash-listing-thumb" style={{width:58,height:58,objectFit:"cover",borderRadius:9,flexShrink:0}}/>:<span className="dash-icon">{emoji(x.category)}</span>}
         <div><b>{x.title}</b><small>{x.status==="reserved"?"E rezervuar":"E disponueshme"} · {x.location_name||"Pa lokacion"}</small></div>
         <button disabled={busy} onClick={e=>{e.stopPropagation();onEdit(x)}}>✏️</button>
         <button disabled={busy} onClick={e=>{e.stopPropagation();onMarkGiven(x)}}>✓</button>
