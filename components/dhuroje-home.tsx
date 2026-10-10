@@ -66,6 +66,15 @@ async function decodeImage(blob:Blob):Promise<DecodedImage>{
   }
 }
 
+function guessImageType(file:File):string{
+  if(PHOTO_UPLOAD_TYPES.includes(file.type))return file.type;
+  const ext=(file.name.split(".").pop()||"").toLowerCase();
+  if(ext==="jpg"||ext==="jpeg")return "image/jpeg";
+  if(ext==="png")return "image/png";
+  if(ext==="webp")return "image/webp";
+  return "";
+}
+
 function looksLikeHeic(file:File):boolean{
   return /\.(heic|heif)$/i.test(file.name)||/image\/(heic|heif)/i.test(file.type);
 }
@@ -87,9 +96,15 @@ async function compressPhotoWithFallback(file:File,maxDimension=1200,targetBytes
   try{
     decoded=await decodeImage(source);
   }catch(_decodeError){
-    const type=file.type||"";
-    if(PHOTO_UPLOAD_TYPES.includes(type)&&file.size<=PHOTO_BUCKET_LIMIT)return file;
-    throw new Error("Shfletuesi nuk e hapi foton. Provo një foto tjetër ose ruaje si JPG.");
+    // The browser cannot decode this photo. Android often reports an empty MIME type for
+    // gallery files, so fall back to the file extension and upload the original untouched.
+    const type=guessImageType(file);
+    const sizeMb=(file.size/1024/1024).toFixed(1);
+    if(type&&file.size<=PHOTO_BUCKET_LIMIT){
+      return file.type===type?file:new File([file],file.name,{type,lastModified:file.lastModified});
+    }
+    if(type)throw new Error("Fotoja është "+sizeMb+" MB dhe shfletuesi nuk mund ta zvogëlojë. Pa zvogëlim lejohen deri në 5 MB.");
+    throw new Error("Shfletuesi nuk e hapi foton (lloji: "+(file.type||"i panjohur")+", "+sizeMb+" MB). Provo një foto tjetër ose ruaje si JPG.");
   }
 
   try{
