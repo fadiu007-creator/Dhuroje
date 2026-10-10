@@ -35,7 +35,7 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 // If the browser cannot decode the picked file (some Android gallery providers),
 // a JPEG/PNG/WebP that already fits the 5 MB bucket limit is uploaded as-is:
 // the upload reads it through the network stack, which works when FileReader does not.
-const PHOTO_BUCKET_LIMIT=5*1024*1024;
+const PHOTO_BUCKET_LIMIT=50*1024*1024;
 const PHOTO_UPLOAD_TYPES=["image/jpeg","image/png","image/webp"];
 
 function toJpegFile(blob:Blob,originalName:string):File{
