@@ -906,7 +906,7 @@ export default function DhurojeHome(){
     {showNotifications&&<div className="page-screen"><Notifications user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {showProfile&&<div className="page-screen"><ProfileModal user={user} onClose={goHome} onChanged={loadNotificationCount}/></div>}
     {publicProfileId&&<div className="page-screen"><PublicProfileModal userId={publicProfileId} onClose={goHome} onListing={(listing,image)=>{setActiveListing(listing);if(image)setImages(prev=>({...prev,[listing.id]:[image,...(prev[listing.id]||[])]}));navigatePage("listing",listing.id);}}/></div>}
-    {showDashboard&&<div className="page-screen"><Dashboard user={user} profile={profile} onClose={goHome} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven} onProfile={openProfile} onMessages={()=>{setShowMessages(true);navigatePage("messages")}} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id)}} onSaved={()=>{setFavoritesOnly(true);navigatePage("saved")}} onRequested={()=>navigatePage("dashboard")}/></div>}
+    {showDashboard&&<div className="page-screen"><Dashboard user={user} profile={profile} onClose={goHome} onSignOut={signOut} onChanged={load} onChat={(listing,claimantId)=>startChat(listing,claimantId)} onEdit={quickEditListing} onMarkGiven={markAsGiven} onProfile={openProfile} onMessages={()=>{setShowMessages(true);navigatePage("messages")}} onListing={(listing)=>{setActiveListing(listing);navigatePage("listing",listing.id)}} onSaved={()=>{setFavoritesOnly(true);navigatePage("saved")}} onRequested={()=>navigatePage("dashboard")}/></div>}
     <nav className="bottom-nav" aria-label="Navigimi kryesor">
       <button className={pageRoute.page==="home"?"nav-active":""} onClick={()=>{setMapMode(false);setShowDashboard(false);goHome()}}>
         <span className="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 19.5z"/><path d="M9 21v-6h6v6"/></svg></span><span>Kryefaqja</span>
@@ -1180,7 +1180,10 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
     }
     const rows=cs||[];
     const listingIds=rows.map((x:any)=>x.listing_id).filter(Boolean);
-    const {data:listingsData}=listingIds.length?await supabase.from("dhuroje_listings").select("id,title,owner_id,location_name,status").in("id",listingIds):{data:[] as any[]};
+    const {data:listingsData}=listingIds.length?await supabase.from("dhuroje_listings").select("id,title,owner_id,location_name,status,category").in("id",listingIds):{data:[] as any[]};
+    const {data:listingPhotoRows}=listingIds.length?await supabase.from("dhuroje_listing_images").select("listing_id,storage_path,sort_order").in("listing_id",listingIds).order("sort_order",{ascending:true}):{data:[] as any[]};
+    const listingPhotoMap:Record<string,string>={};
+    (listingPhotoRows||[]).forEach((photo:any)=>{if(!listingPhotoMap[photo.listing_id])listingPhotoMap[photo.listing_id]=supabase.storage.from("dhuroje-listings").getPublicUrl(photo.storage_path).data.publicUrl;});
     const {data:allMembers}=await supabase.from("dhuroje_conversation_members").select("conversation_id,user_id").in("conversation_id",ids);
     const otherIds=[...new Set((allMembers||[]).filter((m:any)=>m.user_id!==user.id).map((m:any)=>m.user_id))];
     const {data:profiles}=otherIds.length?await supabase.from("dhuroje_profiles").select("id,display_name,avatar_url").in("id",otherIds):{data:[] as any[]};
@@ -1201,6 +1204,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
     const enriched=rows.map((c:any)=>({
       ...c,
       listing:listingMap[c.listing_id],
+      listingImage:listingPhotoMap[c.listing_id]||null,
       listingTitle:listingMap[c.listing_id]?.title||"Dhuratë",
       otherUserId:otherByConversation[c.id],
       otherName:profileMap[otherByConversation[c.id]]?.display_name||"Përdorues",
@@ -1320,7 +1324,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
           <div className="conversation-items">
             {visibleConversations.length?visibleConversations.map(c=><button key={c.id} className={"conversation-user"+(c.id===selectedConversation?" active":"")} onClick={()=>selectConversation(c.id)}>
               <span className="conversation-avatar">{c.avatar?<img src={c.avatar} alt=""/>:initials(c.otherName)}</span>
-              <span className="conversation-user-text"><b>{c.otherName}</b><small className="conversation-product">{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Bisedë e re — nis bisedën"}</small></span>
+              <span className="conversation-user-text"><b>{c.otherName}</b><small className="conversation-product">{c.listingImage&&<img src={c.listingImage} alt="" style={{width:34,height:34,objectFit:"cover",borderRadius:5,verticalAlign:"middle",marginRight:7}}/>}{c.listingTitle}</small><small>{c.lastMessage?.sender_id===user.id?"Ti: ":""}{c.lastMessage?.body||"Bisedë e re — nis bisedën"}</small></span>
               <span className="conversation-time">{c.lastMessage?time(c.lastMessage.created_at):"E re"}</span>
             </button>):<div className="conversation-no-results"><span>⌕</span><b>Nuk u gjet asnjë bisedë</b><small>Provo emrin e përdoruesit ose dhuratën.</small></div>}
           </div>
@@ -1335,7 +1339,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
           </header>
 
           <div className="chat-listing-strip">
-            <span className="chat-listing-icon">{emoji(selected.listing?.category||"other")}</span>
+            {selected.listingImage?<img src={selected.listingImage} alt="" style={{width:58,height:58,objectFit:"cover",borderRadius:8,flexShrink:0}}/>:<span className="chat-listing-icon">{emoji(selected.listing?.category||"other")}</span>}
             <div><b>{selected.listingTitle}</b><small>{selected.listing?.location_name||"Lokacion i panjohur"} · {selected.listing?.status==="reserved"?"E rezervuar":"E disponueshme"}</small></div>
           </div>
 
@@ -1356,7 +1360,7 @@ function Messages({user,onClose,initialConversationId,initialError,onListing}:{u
     }
   </div>;
 }
-function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested,profile}:{user:any;onClose:()=>void;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void;profile:any}){
+function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested,profile}:{user:any;onClose:()=>void;onSignOut:()=>Promise<void>;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void;profile:any}){
   const initialSection=new URLSearchParams(typeof window!=="undefined"?window.location.search:"").get("section")||"overview";
   const [section,setSection]=useState<"overview"|"listings"|"requested">(
     initialSection==="listings"||initialSection==="requested"?initialSection:"overview"
@@ -1439,6 +1443,7 @@ function Dashboard({user,onClose,onChanged,onChat,onEdit,onMarkGiven,onProfile,o
       <button className={section==="listings"?"active":""} onClick={()=>goSection("listings")}>🎁 Shpalljet e mia <span>{activeMine.length}</span></button>
       <button onClick={onSaved}>♥ Lista e dëshirave</button>
       <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Kerkesat e mia <span>{requestedCount}</span></button>
+      <button className="secondary danger" onClick={()=>{if(window.confirm("Dëshiron të dalësh nga llogaria?"))void onSignOut();}}>↪ Dil nga llogaria</button>
     </nav>
 
     {section==="overview"&&<section className="account-section">
