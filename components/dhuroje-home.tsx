@@ -46,10 +46,21 @@ type DecodedImage={source:CanvasImageSource;width:number;height:number;release:(
 
 async function decodeImage(blob:Blob):Promise<DecodedImage>{
   if(typeof createImageBitmap==="function"){
-    try{
-      const bitmap=await createImageBitmap(blob);
-      return {source:bitmap,width:bitmap.width,height:bitmap.height,release:()=>bitmap.close()};
-    }catch(_bitmapError){}
+    // Large camera photos (6+ MB, 40-50 MP) can exceed the memory budget of a full decode on
+    // older Android phones. Ask the browser to decode them already downscaled, then fall back
+    // to a full-size decode.
+    const attempts:Array<ImageBitmapOptions|undefined>=[
+      {resizeWidth:1280,resizeQuality:"medium"},
+      {resizeWidth:800,resizeQuality:"low"},
+      undefined
+    ];
+    for(const options of attempts){
+      try{
+        const bitmap=options?await createImageBitmap(blob,options):await createImageBitmap(blob);
+        if(bitmap.width>0&&bitmap.height>0)return {source:bitmap,width:bitmap.width,height:bitmap.height,release:()=>bitmap.close()};
+        bitmap.close();
+      }catch(_bitmapError){}
+    }
   }
   const url=URL.createObjectURL(blob);
   try{
