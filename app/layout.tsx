@@ -4,7 +4,8 @@ import "./vinted.css";
 
 export const metadata: Metadata = {
   title: "Dhuroje — Mos e hidh. Dhuroje.",
-  description: "Give away unused food and items for free in your community."
+  description: "Give away unused food and items for free in your community.",
+  icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
