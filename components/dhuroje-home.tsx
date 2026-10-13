@@ -775,7 +775,7 @@ export default function DhurojeHome(){
       <div className="explore-mobile-head">
         <div className="explore-location"><strong>Eksploro</strong></div>
         <div className="explore-head-actions">
-          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Piket"><span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:5}</b></button>
+          <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Piket"><span className="dhurapike-fruit" aria-hidden="true">⭐</span><b>{user?dhurapike:5}</b></button>
           <button className="explore-search-button" onClick={()=>setExploreSearchOpen(v=>!v)} aria-label="Kërko">⌕</button>
         </div>
         {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Piket</strong><span>N'start 5 pikë.</span><span>−1 kur kërkon diçka</span><span>+1 kur dhuron diçka</span></div>}
@@ -820,7 +820,7 @@ export default function DhurojeHome(){
         <div className="geev-mobile-head-actions">
           <button onClick={openNotifications} aria-label="Njoftimet">♧</button>
           <button className="dhurapike-badge" onClick={()=>user?setShowDhurapike(v=>!v):setShowAuth(true)} aria-label="Piket">
-            <span className="dhurapike-fruit" aria-hidden="true">🍌</span><b>{user?dhurapike:10}</b>
+            <span className="dhurapike-fruit" aria-hidden="true">⭐</span><b>{user?dhurapike:10}</b>
           </button>
           {showDhurapike&&user&&<div className="dhurapike-popover"><strong>Piket</strong><span>N'start 10 pikë.</span><span>−1 kur merr diçka</span><span>+1 kur dhuron diçka</span></div>}
         </div>
