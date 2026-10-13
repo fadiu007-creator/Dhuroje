@@ -509,3 +509,14 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 .brand-logo{display:block;width:196px;height:auto;max-height:54px;object-fit:contain;object-position:left center}
 .geev-brand .brand-logo{width:164px;max-height:46px}
 @media(max-width:560px){.brand-logo{width:158px;max-height:46px}.geev-brand .brand-logo{width:142px;max-height:42px}}
+
+
+/* Keep the mobile brand, city selector, and points on one compact row. */
+.geev-mobile-location{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;flex-wrap:nowrap!important;width:100%!important;min-width:0!important}
+.geev-brand{flex:0 1 auto!important;min-width:0!important}
+.geev-brand .brand-logo{width:clamp(94px,29vw,142px)!important;max-height:40px!important}
+.geev-city-select{flex:0 1 118px!important;width:118px!important;min-width:76px!important;max-width:118px!important;margin:0!important;padding:8px 20px 8px 8px!important;font-size:12px!important;white-space:nowrap!important}
+.geev-mobile-head-actions{display:flex!important;align-items:center!important;gap:5px!important;flex:0 0 auto!important;position:relative!important}
+.geev-mobile-head-actions>button:first-child{display:none!important}
+.geev-mobile-head-actions .dhurapike-badge{display:flex!important;align-items:center!important;gap:4px!important;padding:7px 8px!important;white-space:nowrap!important}
+@media(max-width:380px){.geev-brand .brand-logo{width:88px!important}.geev-city-select{min-width:70px!important;width:70px!important;font-size:11px!important;padding-left:5px!important;padding-right:14px!important}.geev-mobile-head-actions .dhurapike-badge{padding:6px!important}}
