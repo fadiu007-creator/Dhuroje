@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1640" height="624" viewBox="0 0 1640 624">
+<rect width="1640" height="624" fill="#173B63"/>
+<g fill="none" stroke="#C96F4A" stroke-width="34" stroke-linecap="round">
+<path d="M-40 520C95 400 235 495 205 645"/><path d="M-25 605C90 480 205 490 285 650"/>
+<path d="M1485 -40C1450 100 1560 155 1685 110"/><path d="M1545 -30C1500 90 1570 200 1690 215"/>
+</g>
+<g transform="translate(390 150)">
+<path d="M165 85C115 85 80 51 80 8C128 8 162 38 165 85Z" fill="#C96F4A"/>
+<path d="M178 85C181 38 215 8 263 8C263 51 228 85 178 85Z" fill="#C96F4A"/>
+<path d="M171 85V112" fill="none" stroke="#C96F4A" stroke-width="15" stroke-linecap="round"/>
+<path d="M43 365V225C43 143 91 108 171 108S299 143 299 225V365H242V228C242 182 218 163 171 163S100 182 100 228V365Z" fill="#FFFFFF"/>
+</g>
+<text x="760" y="390" font-family="Arial, Helvetica, sans-serif" font-size="126" font-weight="600" letter-spacing="-5" fill="#FFFFFF">dhuroje</text>
+<text x="770" y="465" font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#FFFFFF">Dhuro diçka që s’e përdor, dikujt mund t’i nevojitet!</text>
+</svg>
