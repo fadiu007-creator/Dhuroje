@@ -504,3 +504,8 @@ html,body{background:#fff!important;color:var(--market-ink)!important}
 .profile-photo-preview{width:72px;height:72px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--green2);color:var(--green);font-size:25px;font-weight:800;flex:none;border:1px solid var(--line)}
 .profile-photo-preview img{width:100%;height:100%;object-fit:cover;display:block}
 .profile-photo-editor .form-help{display:block;margin-top:7px}
+
+/* Dhuroje brand lockup: icon and wordmark side-by-side */
+.brand-logo{display:block;width:196px;height:auto;max-height:54px;object-fit:contain;object-position:left center}
+.geev-brand .brand-logo{width:164px;max-height:46px}
+@media(max-width:560px){.brand-logo{width:158px;max-height:46px}.geev-brand .brand-logo{width:142px;max-height:42px}}
