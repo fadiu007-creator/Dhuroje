@@ -1,0 +1,91 @@
+/* Dhuroje modern skin — loaded after globals.css and vinted.css.
+   Visual layer only: colors, type, radii, shadows. Layout rules are left to the earlier files. */
+:root{
+  --d-ink:#0e2f33;--d-teal:#007782;--d-teal-deep:#00555e;
+  --d-mint:#a8e6bf;--d-mint-wash:#eaf6f1;
+  --d-coral:#ff6f55;--d-coral-deep:#e85a40;--d-coral-wash:#ffece6;
+  --d-paper:#f6faf9;--d-line:#dbe8e5;--d-muted:#587176;
+  --d-display:"Bricolage Grotesque","Figtree",ui-sans-serif,system-ui,sans-serif;
+  --d-body:"Figtree",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --d-shadow:0 1px 2px rgba(0,85,94,.06),0 10px 30px -14px rgba(0,85,94,.24);
+  --d-shadow-hover:0 2px 4px rgba(0,85,94,.08),0 20px 40px -16px rgba(0,85,94,.34);
+}
+html,body{background:var(--d-paper)!important;color:var(--d-ink)!important;font-family:var(--d-body)!important}
+body{font-size:15px!important;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,.modal h2,.section-head h2,.geev-mobile-section-head h2{font-family:var(--d-display)!important;color:var(--d-ink);letter-spacing:-.02em}
+
+/* Focus that is always visible for keyboard users */
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:3px solid rgba(0,119,130,.5)!important;outline-offset:2px}
+input:focus,select:focus,textarea:focus{outline:none!important;border-color:var(--d-teal)!important;box-shadow:0 0 0 4px rgba(0,119,130,.14)!important}
+
+/* Header */
+.topbar{background:rgba(255,255,255,.9)!important;backdrop-filter:blur(14px)!important;-webkit-backdrop-filter:blur(14px)!important;border-bottom:1px solid var(--d-line)!important}
+.header-search input{border-radius:999px!important;background:var(--d-mint-wash)!important;border:1px solid transparent!important;height:42px!important}
+.header-search input:focus{background:#fff!important}
+.top-nav button{border-radius:999px!important;font-weight:600!important;color:#46666b!important}
+.top-nav button:hover{background:var(--d-mint-wash)!important}
+.top-nav .top-nav-active{background:var(--d-mint-wash)!important;color:var(--d-teal-deep)!important}
+.header-link{background:var(--d-coral)!important;color:#fff!important;border-radius:999px!important;font-weight:700!important;box-shadow:0 8px 18px -8px rgba(255,111,85,.75)!important}
+.header-link:hover{background:var(--d-coral-deep)!important}
+.profile-button,.notification-button{background:var(--d-mint-wash)!important;color:var(--d-teal-deep)!important}
+.profile-menu{border:1px solid var(--d-line)!important;border-radius:18px!important;box-shadow:0 24px 60px -20px rgba(0,60,66,.4)!important}
+.profile-menu button:hover{background:var(--d-mint-wash)!important}
+
+/* Hero */
+.hero{position:relative;overflow:hidden;background:var(--d-mint-wash)!important;border-radius:28px!important}
+.hero::before{content:"";position:absolute;right:-70px;top:-80px;width:300px;height:300px;border-radius:50%;background:var(--d-mint);opacity:.5;pointer-events:none}
+.hero::after{content:"";position:absolute;right:140px;bottom:-110px;width:210px;height:210px;border-radius:50%;background:var(--d-coral);opacity:.16;pointer-events:none}
+.hero>*{position:relative;z-index:1}
+.hero h1{font-family:var(--d-display)!important;font-weight:800!important;color:var(--d-teal-deep)!important;letter-spacing:-.045em!important;line-height:.98!important}
+.hero h1 span{color:inherit!important}
+.hero-copy{color:var(--d-muted)!important;font-size:17px!important;line-height:1.55!important}
+.eyebrow{text-transform:none!important;letter-spacing:0!important;font-size:14px!important;font-weight:700!important;color:var(--d-teal)!important}
+
+/* Buttons */
+.primary{background:var(--d-coral)!important;color:#fff!important;border-radius:999px!important;padding:14px 24px!important;font-weight:700!important;box-shadow:0 10px 22px -10px rgba(255,111,85,.8)!important;transition:background .15s ease,transform .15s ease}
+.primary:hover{background:var(--d-coral-deep)!important}
+.primary:active{transform:translateY(1px)}
+.secondary{background:#fff!important;color:var(--d-teal-deep)!important;border:1px solid var(--d-line)!important;border-radius:999px!important;font-weight:700!important}
+.claim{background:var(--d-teal)!important;color:#fff!important;border-radius:999px!important}
+.claimed{background:var(--d-mint-wash)!important;color:var(--d-teal-deep)!important;border-radius:999px!important}
+.filter-button,.map-toggle{border:1px solid var(--d-line)!important;border-radius:999px!important;background:#fff!important;color:var(--d-teal-deep)!important;font-weight:600!important}
+
+/* Search and categories */
+.search-wrap input{border-radius:999px!important;border:1px solid var(--d-line)!important;background:#fff!important;box-shadow:var(--d-shadow)!important}
+.categories{border-bottom-color:var(--d-line)!important}
+.chip{border-radius:999px!important;background:#fff!important;border:1px solid var(--d-line)!important;color:var(--d-ink)!important;font-size:13px!important;font-weight:600!important;padding:9px 15px!important}
+.chip:hover{border-color:var(--d-teal)!important}
+.chip.active{background:var(--d-teal-deep)!important;border-color:var(--d-teal-deep)!important;color:#fff!important}
+.pin{color:var(--d-coral-deep)!important}
+
+/* Listing cards */
+.card,.explore-card{background:#fff!important;border:1px solid var(--d-line)!important;border-radius:20px!important;box-shadow:var(--d-shadow)!important;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease}
+@media (hover:hover){.card:hover,.explore-card:hover{transform:translateY(-3px)!important;box-shadow:var(--d-shadow-hover)!important}}
+.card-image,.explore-card-image,.geev-card-image,.geev-feature-image{background:var(--d-mint-wash)!important}
+.geev-card-image,.geev-feature-image{border-radius:16px!important;overflow:hidden}
+.card-image b{background:var(--d-coral)!important;color:#fff!important;border-radius:999px!important;padding:5px 11px!important;font-size:12px!important;font-weight:700!important;letter-spacing:0!important}
+.card-image button,.explore-card-image button,.geev-card-image button{background:rgba(255,255,255,.94)!important;color:var(--d-coral-deep)!important;border-radius:50%!important;box-shadow:0 4px 14px rgba(0,40,45,.2)!important}
+.card h3,.explore-card-body strong,.geev-card-body strong,.geev-feature-card strong{font-family:var(--d-display)!important;font-weight:700!important;letter-spacing:-.01em!important;color:var(--d-ink)!important}
+.card p,.explore-card-body span,.card-footer small{color:var(--d-muted)!important}
+.card .meta span:first-child{background:var(--d-mint-wash);color:var(--d-teal-deep);padding:3px 10px;border-radius:999px;font-weight:600}
+.card-footer{border-top-color:var(--d-line)!important}
+.poster-name-link,.text-button{color:var(--d-teal)!important}
+.geev-mobile-section-head button,.section-head button{color:var(--d-teal)!important;font-weight:700!important}
+
+/* Bottom navigation */
+.bottom-nav{background:rgba(255,255,255,.95)!important;backdrop-filter:blur(14px)!important;-webkit-backdrop-filter:blur(14px)!important;border:1px solid var(--d-line)!important;border-bottom:0!important;border-radius:22px 22px 0 0!important;box-shadow:0 -12px 32px -14px rgba(0,85,94,.28)!important}
+.bottom-nav button{color:#6a8589!important;font-weight:600!important}
+.bottom-nav button span:last-child{font-size:10.5px!important}
+.bottom-nav .nav-active{color:var(--d-teal)!important}
+.bottom-nav .nav-add{background:var(--d-coral)!important;color:#fff!important;border-radius:18px!important;box-shadow:0 12px 22px -10px rgba(255,111,85,.85)!important}
+
+/* Dialogs, forms, panels */
+.modal-backdrop,.edit-modal-backdrop{background:rgba(7,40,45,.5)!important;backdrop-filter:blur(3px)}
+.modal{border-radius:26px!important;box-shadow:0 32px 80px -24px rgba(0,60,66,.5)!important}
+.modal input,.modal select,.modal textarea,.search-filters select{border:1px solid var(--d-line)!important;border-radius:14px!important;background:#fff!important}
+.listing-form-card,.request-form-card,.account-section{border:1px solid var(--d-line)!important;border-radius:22px!important;box-shadow:var(--d-shadow)!important}
+.form-section-title{font-family:var(--d-display);color:var(--d-teal-deep)}
+.app-error-toast{border-radius:16px!important}
+.empty,.explore-empty,.saved-empty,.geev-empty-mini{background:var(--d-mint-wash)!important;border:1px dashed var(--d-mint)!important;border-radius:18px!important;color:var(--d-muted)!important}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
