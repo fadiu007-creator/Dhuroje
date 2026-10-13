@@ -1,11 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 220" role="img" aria-labelledby="title desc">
-<title id="title">dhuroje</title>
-<desc id="desc">Minimal gift-inspired arch in navy and terracotta above the lowercase dhuroje wordmark.</desc>
-<g transform="translate(112 12)">
-  <path d="M68 42 C45 42 26 25 26 7 C47 6 64 19 68 42 Z" fill="#C96F4A"/>
-  <path d="M72 42 C76 19 93 6 114 7 C114 25 95 42 72 42 Z" fill="#C96F4A"/>
-  <path d="M70 42 V52" fill="none" stroke="#C96F4A" stroke-width="5" stroke-linecap="round"/>
-  <path d="M18 132 V94 C18 65 39 48 70 48 C101 48 122 65 122 94 V132 H100 V95 C100 77 89 68 70 68 C51 68 40 77 40 95 V132 Z" fill="#173B63"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 100" role="img" aria-labelledby="title desc">
+<title id="title">dhuroje</title><desc id="desc">Gift-inspired navy arch and terracotta bow beside the lowercase dhuroje wordmark.</desc>
+<g transform="translate(8 5)">
+<path d="M40 27 C24 27 12 16 12 3 C27 3 39 12 40 27Z" fill="#C96F4A"/>
+<path d="M44 27 C45 12 57 3 72 3 C72 16 60 27 44 27Z" fill="#C96F4A"/>
+<path d="M42 27V34" fill="none" stroke="#C96F4A" stroke-width="4" stroke-linecap="round"/>
+<path d="M3 83V58C3 39 18 30 42 30S81 39 81 58V83H64V59C64 47 56 43 42 43S20 47 20 59V83Z" fill="#173B63"/>
 </g>
-<text x="180" y="198" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="600" letter-spacing="-2.2" fill="#173B63">dhuroje</text>
-</svg>
+<text x="105" y="70" font-family="Arial, Helvetica, sans-serif" font-size="57" font-weight="600" letter-spacing="-2.5" fill="#173B63">dhuroje</text></svg>
