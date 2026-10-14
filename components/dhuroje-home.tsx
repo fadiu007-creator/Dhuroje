@@ -444,6 +444,8 @@ export default function DhurojeHome(){
   async function openProfile(){if(!user){setShowAuth(true);return;}setShowProfile(true);navigatePage("me");}
   async function toggleFavorite(id:string){
     if(!requireAuth())return;
+    const favoriteListing=listings.find(x=>x.id===id)||(activeListing?.id===id?activeListing:null);
+    if(favoriteListing?.owner_id===user.id){setError("Nuk mund të ruash shpalljen tënde në Listën e dëshirave.");return;}
     if(favorites.includes(id)){await supabase.from("dhuroje_favorites").delete().eq("user_id",user.id).eq("listing_id",id);setFavorites(x=>x.filter(v=>v!==id));}
     else{await supabase.from("dhuroje_favorites").insert({user_id:user.id,listing_id:id});setFavorites(x=>[...x,id]);}
   }
@@ -810,7 +812,7 @@ export default function DhurojeHome(){
         </article>)}</div>
       </div>:<><div className="explore-result-head"><strong>{filtered.length} {exploreTab==="food"?"ushqime":"gjëra"}</strong><span>{location}</span></div>
       <div className="explore-grid">{filtered.map(item=><article className="explore-card" key={item.id} onClick={()=>{setActiveListing(item);navigatePage("listing",item.id)}}>
-        <div className="explore-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button></div>
+        <div className="explore-card-image">{images[item.id]?.[0]?<img src={images[item.id][0]} alt="" />:<span>{emoji(item.category)}</span>}{item.owner_id!==user?.id&&<button onClick={e=>{e.stopPropagation();toggleFavorite(item.id)}} aria-label="Ruaj">{favorites.includes(item.id)?"♥":"♡"}</button>}</div>
         <div className="explore-card-body"><strong>{item.title}</strong><span>⌖ {item.location_name||"Pranë teje"}{coords&&distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!=null?" · "+distanceKm(coords.lat,coords.lon,item.latitude,item.longitude)!.toFixed(0)+" km":""}</span></div>
       </article>)}</div>
       {!loading&&filtered.length===0&&<div className="explore-empty">Nuk u gjet asnjë dhuratë me këto filtra.</div>}
@@ -974,7 +976,7 @@ function PublicProfileModal({userId,onClose,onChat,onListing}:{userId:string;onC
 function ListingDetail({listing,images,saved,claimed,isOwner,onClose,onClaim,onSave,onChat,onEdit,onMarkGiven,onDelete,onProfile}:{listing:Listing;images:string[];saved:boolean;claimed:boolean;isOwner:boolean;onClose:()=>void;onClaim:()=>void;onSave:()=>void;onChat:()=>void;onEdit:()=>void;onMarkGiven:()=>void;onDelete:()=>void;onProfile:()=>void}){
   const [zoomImage,setZoomImage]=useState<string|null>(null);
   const [photoIndex,setPhotoIndex]=useState(0);
-  return <><div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><p className="eyebrow">{categoryLabel[listing.category]||listing.category}</p><h2>{listing.title}</h2></div><button className="close" onClick={onClose}>×</button></div>{images.length>0?<div style={{position:"relative",marginBottom:16}}><button type="button" onClick={()=>setZoomImage(images[photoIndex])} aria-label="Zmadho foton" title="Zmadho foton" style={{display:"block",padding:0,border:0,background:"transparent",width:"100%",cursor:"zoom-in"}}><img className="detail-image" src={images[photoIndex]} alt={"Foto "+(photoIndex+1)} style={{cursor:"zoom-in"}}/><span style={{position:"absolute",right:10,bottom:10,background:"rgba(0,0,0,.68)",color:"white",padding:"7px 10px",borderRadius:20,fontSize:13}}>🔍 Zmadho</span></button>{images.length>1&&<div style={{display:"flex",gap:8,overflowX:"auto",paddingTop:10}}>{images.map((src,i)=><button key={src} type="button" onClick={()=>setPhotoIndex(i)} aria-label={"Shfaq foton "+(i+1)} style={{padding:0,border:photoIndex===i?"2px solid #23864b":"2px solid transparent",borderRadius:8,flex:"0 0 64px",height:64,overflow:"hidden",background:"transparent"}}><img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></button>)}</div>}</div>:<div className="detail-emoji">{emoji(listing.category)}</div>}<p>{listing.description||"Pa përshkrim."}</p><button className="poster-line poster-button" onClick={onProfile}>👤 <strong>{listing.owner?.display_name||"Përdorues i regjistruar"}</strong> · Dhurues</button><p>📍 {listing.location_name||"Pranë teje"}</p><p>🕒 Postuar më {new Date(listing.created_at).toLocaleDateString("sq-AL")}</p>{listing.food_refrigerated&&<p>❄️ Kërkon frigorifer</p>}{listing.food_opened&&<p>📦 E hapur</p>}<div className="detail-actions">{isOwner?<><button className="primary" onClick={onEdit}>✏️ Ndrysho shpalljen</button><button className="secondary" onClick={onMarkGiven}>✓ Shëno si të dhuruar</button><button className="secondary danger" onClick={onDelete}>🗑️ Fshi shpalljen</button></>:<><button className="primary" onClick={onClaim}>{claimed?"Hiq kërkesën":"Bëj kërkesë"}</button><button className="secondary" onClick={onChat}>💬 Dërgo mesazh</button></>}<button className="secondary" onClick={onSave}>{saved?"♥ E ruajtur":"♡ Ruaje"}</button></div></div></div>{zoomImage&&<div role="dialog" aria-modal="true" aria-label="Foto e zmadhuar" onClick={()=>setZoomImage(null)} style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.94)",display:"flex",alignItems:"center",justifyContent:"center",padding:12,cursor:"zoom-out"}}><button type="button" onClick={()=>setZoomImage(null)} aria-label="Mbyll zmadhimin" style={{position:"absolute",top:16,right:16,zIndex:1,border:0,borderRadius:999,width:44,height:44,fontSize:28,background:"rgba(255,255,255,.18)",color:"white"}}>×</button><img src={zoomImage} alt="Foto e zmadhuar" onClick={()=>setZoomImage(null)} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",cursor:"zoom-out"}}/><span style={{position:"absolute",bottom:16,left:0,right:0,textAlign:"center",color:"white",fontSize:13}}>Prek jashtë fotos për ta mbyllur</span></div>}</>;
+  return <><div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><p className="eyebrow">{categoryLabel[listing.category]||listing.category}</p><h2>{listing.title}</h2></div><button className="close" onClick={onClose}>×</button></div>{images.length>0?<div style={{position:"relative",marginBottom:16}}><button type="button" onClick={()=>setZoomImage(images[photoIndex])} aria-label="Zmadho foton" title="Zmadho foton" style={{display:"block",padding:0,border:0,background:"transparent",width:"100%",cursor:"zoom-in"}}><img className="detail-image" src={images[photoIndex]} alt={"Foto "+(photoIndex+1)} style={{cursor:"zoom-in"}}/><span style={{position:"absolute",right:10,bottom:10,background:"rgba(0,0,0,.68)",color:"white",padding:"7px 10px",borderRadius:20,fontSize:13}}>🔍 Zmadho</span></button>{images.length>1&&<div style={{display:"flex",gap:8,overflowX:"auto",paddingTop:10}}>{images.map((src,i)=><button key={src} type="button" onClick={()=>setPhotoIndex(i)} aria-label={"Shfaq foton "+(i+1)} style={{padding:0,border:photoIndex===i?"2px solid #23864b":"2px solid transparent",borderRadius:8,flex:"0 0 64px",height:64,overflow:"hidden",background:"transparent"}}><img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></button>)}</div>}</div>:<div className="detail-emoji">{emoji(listing.category)}</div>}<p>{listing.description||"Pa përshkrim."}</p><button className="poster-line poster-button" onClick={onProfile}>👤 <strong>{listing.owner?.display_name||"Përdorues i regjistruar"}</strong> · Dhurues</button><p>📍 {listing.location_name||"Pranë teje"}</p><p>🕒 Postuar më {new Date(listing.created_at).toLocaleDateString("sq-AL")}</p>{listing.food_refrigerated&&<p>❄️ Kërkon frigorifer</p>}{listing.food_opened&&<p>📦 E hapur</p>}<div className="detail-actions">{isOwner?<><button className="primary" onClick={onEdit}>✏️ Ndrysho shpalljen</button><button className="secondary" onClick={onMarkGiven}>✓ Shëno si të dhuruar</button><button className="secondary danger" onClick={onDelete}>🗑️ Fshi shpalljen</button></>:<><button className="primary" onClick={onClaim}>{claimed?"Hiq kërkesën":"Bëj kërkesë"}</button><button className="secondary" onClick={onChat}>💬 Dërgo mesazh</button></>}{!isOwner&&<button className="secondary" onClick={onSave}>{saved?"♥ E ruajtur":"♡ Ruaje"}</button>}</div></div></div>{zoomImage&&<div role="dialog" aria-modal="true" aria-label="Foto e zmadhuar" onClick={()=>setZoomImage(null)} style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.94)",display:"flex",alignItems:"center",justifyContent:"center",padding:12,cursor:"zoom-out"}}><button type="button" onClick={()=>setZoomImage(null)} aria-label="Mbyll zmadhimin" style={{position:"absolute",top:16,right:16,zIndex:1,border:0,borderRadius:999,width:44,height:44,fontSize:28,background:"rgba(255,255,255,.18)",color:"white"}}>×</button><img src={zoomImage} alt="Foto e zmadhuar" onClick={()=>setZoomImage(null)} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",cursor:"zoom-out"}}/><span style={{position:"absolute",bottom:16,left:0,right:0,textAlign:"center",color:"white",fontSize:13}}>Prek jashtë fotos për ta mbyllur</span></div>}</>;
 }
 
 function EditListingModal({listing,onClose,onSaved}:{listing:Listing;onClose:()=>void;onSaved:()=>Promise<void>}){
@@ -1368,10 +1370,10 @@ function Messages({user,dhurapike,onClose,initialConversationId,initialError,onL
 }
 function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,onProfile,onMessages,onListing,onSaved,onRequested,profile}:{user:any;onClose:()=>void;onSignOut:()=>Promise<void>;onChanged:()=>void;onChat:(listing:Listing,claimantId:string)=>void;onEdit:(listing:Listing)=>void;onMarkGiven:(listing:Listing)=>void;onProfile:()=>void;onMessages:()=>void;onListing:(listing:Listing)=>void;onSaved:()=>void;onRequested:()=>void;profile:any}){
   const initialSection=new URLSearchParams(typeof window!=="undefined"?window.location.search:"").get("section")||"overview";
-  const [section,setSection]=useState<"overview"|"listings"|"requested">(
-    initialSection==="listings"||initialSection==="requested"?initialSection:"overview"
+  const [section,setSection]=useState<"overview"|"listings"|"requested"|"received">(
+    initialSection==="listings"||initialSection==="requested"||initialSection==="received"?initialSection:"overview"
   );
-  const [mine,setMine]=useState<Listing[]>([]),[mineImages,setMineImages]=useState<Record<string,string>>({}),[wanted,setWanted]=useState<Claim[]>([]),[busy,setBusy]=useState(false);
+  const [mine,setMine]=useState<Listing[]>([]),[mineImages,setMineImages]=useState<Record<string,string>>({}),[wanted,setWanted]=useState<Claim[]>([]),[received,setReceived]=useState<any[]>([]),[busy,setBusy]=useState(false);
 
   async function load(){
     if(!user)return;
@@ -1381,6 +1383,15 @@ function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,o
     ]);
     const listings=(ls||[]) as Listing[];
     setMine(listings);
+    if(listings.length){
+      const {data:incoming}=await supabase.from("dhuroje_claims").select("*, listing:dhuroje_listings(*)").in("listing_id",listings.map(x=>x.id)).neq("claimant_id",user.id).order("created_at",{ascending:false});
+      const rows=(incoming||[]) as any[];
+      const claimantIds=[...new Set(rows.map(x=>x.claimant_id).filter(Boolean))];
+      const {data:claimantProfiles}=claimantIds.length?await supabase.from("dhuroje_profiles").select("id,display_name,avatar_url").in("id",claimantIds):{data:[] as any[]};
+      const profilesById:Record<string,any>={};
+      (claimantProfiles||[]).forEach((p:any)=>{profilesById[p.id]=p;});
+      setReceived(rows.filter(x=>x.status!=="cancelled").map(x=>({...x,claimant:profilesById[x.claimant_id]||null})));
+    }else setReceived([]);
     if(listings.length){
       const {data:photoRows}=await supabase.from("dhuroje_listing_images").select("listing_id,storage_path,sort_order").in("listing_id",listings.map(x=>x.id)).order("sort_order",{ascending:true});
       const first:Record<string,string>={};
@@ -1393,13 +1404,13 @@ function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,o
   useEffect(()=>{
     const sync=()=>{
       const s=new URLSearchParams(window.location.search).get("section")||"overview";
-      setSection(s==="listings"||s==="requested"?s:"overview");
+      setSection(s==="listings"||s==="requested"||s==="received"?s:"overview");
     };
     window.addEventListener("popstate",sync);
     return()=>window.removeEventListener("popstate",sync);
   },[]);
 
-  function goSection(next:"overview"|"listings"|"requested"){
+  function goSection(next:"overview"|"listings"|"requested"|"received"){
     setSection(next);
     const p=new URLSearchParams(window.location.search);
     p.set("page","dashboard");
@@ -1410,6 +1421,7 @@ function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,o
   const activeMine=mine.filter(x=>["available","reserved"].includes(x.status));
   const givenCount=mine.filter(x=>x.status==="collected").length;
   const requestedCount=wanted.filter((x:any)=>["pending","accepted"].includes(x.status)).length;
+  const receivedCount=received.filter((x:any)=>["pending","accepted"].includes(x.status)).length;
 
   async function deleteLocal(listing:Listing){
     if(!window.confirm("Ta fshij përgjithmonë këtë shpallje?"))return;
@@ -1441,6 +1453,7 @@ function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,o
       <button onClick={()=>goSection("listings")}><b>{activeMine.length}</b><span>Shpallje aktive</span></button>
       <button onClick={()=>goSection("listings")}><b>{givenCount}</b><span>Të dhuruara</span></button>
       <button onClick={()=>goSection("requested")}><b>{requestedCount}</b><span>Të kërkuara</span></button>
+      <button onClick={()=>goSection("received")}><b>{receivedCount}</b><span>Kërkesa për mua</span></button>
     </div>
 
     <nav className="account-sections" aria-label="Paneli im">
@@ -1448,7 +1461,8 @@ function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,o
       <button onClick={onMessages}>💬 Mesazhet</button>
       <button className={section==="listings"?"active":""} onClick={()=>goSection("listings")}>🎁 Shpalljet e mia <span>{activeMine.length}</span></button>
       <button onClick={onSaved}>♥ Lista e dëshirave</button>
-      <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Kerkesat e mia <span>{requestedCount}</span></button>
+      <button className={section==="requested"?"active":""} onClick={()=>goSection("requested")}>🙋 Kërkesat e mia <span>{requestedCount}</span></button>
+      <button className={section==="received"?"active":""} onClick={()=>goSection("received")}>📩 Kërkesat për shpalljet e mia <span>{receivedCount}</span></button>
       <button className="secondary danger" onClick={()=>{void onSignOut();}}>↪ Dil nga llogaria</button>
     </nav>
 
@@ -1484,6 +1498,14 @@ function Dashboard({user,onClose,onSignOut,onChanged,onChat,onEdit,onMarkGiven,o
         {x.status==="pending"&&<button disabled={busy} className="danger" onClick={async e=>{e.stopPropagation();setBusy(true);const r=await supabase.from("dhuroje_claims").update({status:"cancelled"}).eq("id",x.id).eq("claimant_id",user.id).eq("status","pending");if(r.error)alert(r.error.message);await load();setBusy(false);}}>↩ Tërhiq</button>}
         {x.status==="accepted"&&x.listing&&<button onClick={e=>{e.stopPropagation();onChat(x.listing,x.listing.owner_id)}}>💬 Mesazho</button>}
       </div>):<div className="empty">Nuk ke kërkuar ende ndonjë dhuratë.</div>}</div>
+    </section>}
+    {section==="received"&&<section className="account-section">
+      <div className="account-section-head"><div><p className="eyebrow">KËRKESA TË PRANUARA</p><h2>Kërkesat për shpalljet e mia</h2><p>Këtu shfaqen personat që kanë kërkuar një nga shpalljet e tua.</p></div><button className="secondary" onClick={()=>{void load();}}>↻ Rifresko</button></div>
+      <div className="dash-list">{received.length?received.map((x:any)=><div className="dash-row account-list-row" key={x.id} onClick={()=>x.listing&&onListing(x.listing)}>
+        <span className="dash-icon">{emoji(x.listing?.category||"other")}</span>
+        <div><b>{x.listing?.title||"Shpallje"}</b><small>{x.claimant?.display_name||"Përdorues"} · {x.status==="pending"?"Në pritje":x.status==="accepted"?"Pranuar":x.status} · {new Date(x.created_at).toLocaleDateString("sq-AL")}</small></div>
+        {x.listing&&<button disabled={busy} onClick={e=>{e.stopPropagation();onChat(x.listing,x.claimant_id)}}>💬 Dërgo mesazh</button>}
+      </div>):<div className="empty">Nuk ke marrë ende kërkesa për shpalljet e tua.</div>}</div>
     </section>}
   </div>;
 }
