@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<rect width="1200" height="630" fill="#173B63"/>
+<circle cx="1040" cy="80" r="220" fill="#214b74"/>
+<circle cx="1100" cy="590" r="210" fill="#214b74"/>
+<g fill="none" stroke="#C96F4A" stroke-width="20" stroke-linecap="round">
+<path d="M-35 515C70 415 175 480 155 635"/>
+<path d="M-25 585C65 490 160 500 225 640"/>
+<path d="M1010 -25C985 70 1080 125 1215 90"/>
+</g>
+<g transform="translate(390 95) scale(1.05)">
+<path d="M165 85C115 85 80 51 80 8C128 8 162 38 165 85Z" fill="#C96F4A"/>
+<path d="M178 85C181 38 215 8 263 8C263 51 228 85 178 85Z" fill="#C96F4A"/>
+<path d="M171 85V112" fill="none" stroke="#C96F4A" stroke-width="15" stroke-linecap="round"/>
+<path d="M43 365V225C43 143 91 108 171 108S299 143 299 225V365H242V228C242 182 218 163 171 163S100 182 100 228V365Z" fill="#FFFFFF"/>
+</g>
+<text x="600" y="535" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="94" font-weight="600" letter-spacing="-3" fill="#FFFFFF">dhuroje</text>
+<text x="600" y="582" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" fill="#FFFFFF">Dhuro diçka që s’e përdor, dikujt mund t’i nevojitet!</text>
+</svg>
