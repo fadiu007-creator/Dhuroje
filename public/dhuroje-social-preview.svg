@@ -1,18 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-<rect width="1200" height="630" fill="#173B63"/>
-<circle cx="1040" cy="80" r="220" fill="#214b74"/>
-<circle cx="1100" cy="590" r="210" fill="#214b74"/>
-<g fill="none" stroke="#C96F4A" stroke-width="20" stroke-linecap="round">
-<path d="M-35 515C70 415 175 480 155 635"/>
-<path d="M-25 585C65 490 160 500 225 640"/>
-<path d="M1010 -25C985 70 1080 125 1215 90"/>
+<rect width="1200" height="630" fill="#F7F2EC"/>
+<circle cx="0" cy="0" r="145" fill="#F0ECE6"/>
+<circle cx="1200" cy="630" r="230" fill="#F3E8DE"/>
+<g transform="translate(330 135)">
+  <g transform="translate(0 0)">
+    <path d="M83 42C49 42 25 19 25 -12C58 -12 80 9 83 42Z" fill="#C96F4A"/>
+    <path d="M91 42C94 9 116 -12 149 -12C149 19 125 42 91 42Z" fill="#C96F4A"/>
+    <path d="M87 42V56" fill="none" stroke="#C96F4A" stroke-width="8" stroke-linecap="round"/>
+    <path d="M8 145V88C8 39 35 19 87 19S166 39 166 88V145H126V89C126 62 114 51 87 51S48 62 48 89V145Z" fill="#173B63"/>
+  </g>
+  <text x="190" y="111" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" letter-spacing="-3" fill="#173B63">dhuroje</text>
 </g>
-<g transform="translate(390 95) scale(1.05)">
-<path d="M165 85C115 85 80 51 80 8C128 8 162 38 165 85Z" fill="#C96F4A"/>
-<path d="M178 85C181 38 215 8 263 8C263 51 228 85 178 85Z" fill="#C96F4A"/>
-<path d="M171 85V112" fill="none" stroke="#C96F4A" stroke-width="15" stroke-linecap="round"/>
-<path d="M43 365V225C43 143 91 108 171 108S299 143 299 225V365H242V228C242 182 218 163 171 163S100 182 100 228V365Z" fill="#FFFFFF"/>
-</g>
-<text x="600" y="535" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="94" font-weight="600" letter-spacing="-3" fill="#FFFFFF">dhuroje</text>
-<text x="600" y="582" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" fill="#FFFFFF">Dhuro diçka që s’e përdor, dikujt mund t’i nevojitet!</text>
+<rect x="555" y="318" width="90" height="3" rx="1.5" fill="#C96F4A"/>
+<text x="600" y="360" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="29" fill="#536A80">Ajo që s’të duhet ty, i duhet dikujt tjetër.</text>
 </svg>
