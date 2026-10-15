@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     siteName: "Dhuroje",
     title: "Dhuroje — Mos e hidh. Dhuroje.",
     description:
-      "Dhuro gjërat që nuk i përdor dhe gjej falas gjëra që të nevojiten.",
+      "Ajo që s’të duhet ty, i duhet dikujt tjetër.",
     images: [
       {
         url: "/dhuroje-social-preview.svg",
         width: 1200,
         height: 630,
-        alt: "Dhuroje — Dhuro diçka që s’e përdor, dikujt mund t’i nevojitet!",
+        alt: "Dhuroje — Ajo që s’të duhet ty, i duhet dikujt tjetër.",
       },
     ],
     locale: "sq_XK",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Dhuroje — Mos e hidh. Dhuroje.",
     description:
-      "Dhuro gjërat që nuk i përdor dhe gjej falas gjëra që të nevojiten.",
+      "Ajo që s’të duhet ty, i duhet dikujt tjetër.",
     images: ["/dhuroje-social-preview.svg"],
   },
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
