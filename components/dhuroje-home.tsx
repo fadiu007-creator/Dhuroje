@@ -40,7 +40,7 @@ const emoji=(c:string)=>({food:"🥖",clothing:"👕",home:"🪑",electronics:"�
 // If the browser cannot decode the picked file (some Android gallery providers),
 // a JPEG/PNG/WebP that already fits the 5 MB bucket limit is uploaded as-is:
 // the upload reads it through the network stack, which works when FileReader does not.
-const PHOTO_BUCKET_LIMIT=50*1024*1024;
+const PHOTO_BUCKET_LIMIT=5*1024*1024;
 const PHOTO_UPLOAD_TYPES=["image/jpeg","image/png","image/webp"];
 
 function toJpegFile(blob:Blob,originalName:string):File{
@@ -444,10 +444,24 @@ export default function DhurojeHome(){
   async function openProfile(){if(!user){setShowAuth(true);return;}setShowProfile(true);navigatePage("me");}
   async function toggleFavorite(id:string){
     if(!requireAuth())return;
+    const currentUser=user;
+    if(!currentUser?.id)return;
     const favoriteListing=listings.find(x=>x.id===id)||(activeListing?.id===id?activeListing:null);
-    if(favoriteListing?.owner_id===user.id){setError("Nuk mund të ruash shpalljen tënde në Listën e dëshirave.");return;}
-    if(favorites.includes(id)){await supabase.from("dhuroje_favorites").delete().eq("user_id",user.id).eq("listing_id",id);setFavorites(x=>x.filter(v=>v!==id));}
-    else{await supabase.from("dhuroje_favorites").insert({user_id:user.id,listing_id:id});setFavorites(x=>[...x,id]);}
+    if(favoriteListing?.owner_id===currentUser.id){setError("Nuk mund të ruash shpalljen tënde në Listën e dëshirave.");return;}
+    setError("");
+    if(favorites.includes(id)){
+      const {error:e}=await supabase.from("dhuroje_favorites").delete().eq("user_id",currentUser.id).eq("listing_id",id);
+      if(e){setError("Shpallja nuk u hoq nga Lista e dëshirave. Provo përsëri.");return;}
+      setFavorites(x=>x.filter(v=>v!==id));
+    }else{
+      const {error:e}=await supabase.from("dhuroje_favorites").insert({user_id:currentUser.id,listing_id:id});
+      if(e){
+        if(e.code==="23505"){setFavorites(x=>x.includes(id)?x:[...x,id]);return;}
+        setError("Shpallja nuk u ruajt në Listën e dëshirave. Provo përsëri.");
+        return;
+      }
+      setFavorites(x=>x.includes(id)?x:[...x,id]);
+    }
   }
   async function claim(id:string){
     const currentUser=await requireAuthenticatedUser();
